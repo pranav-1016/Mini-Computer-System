@@ -1,5 +1,6 @@
-#ifdef COMPILER_H
+#ifndef COMPILER_H
 #define COMPILER_H
 
 void compile();
+
 #endif

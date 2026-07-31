@@ -1,7 +1,7 @@
 CC = gcc
 CFLAGS = -Wall -g
 
-TARGET = program
+TARGET = simulator
 
 OBJS = main.o compiler.o processor.o memory.o
 

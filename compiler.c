@@ -1,6 +1,7 @@
 #include<stdio.h>
 #include<string.h>
 #include "compiler.h"
+#include "memory.h"
 
 void compile() {
     FILE *input = fopen("input.txt", "r");
@@ -41,10 +42,10 @@ void compile() {
             
             // Artihmetic operation
             if (sscanf(buffer, "x%d = x%d %c x%d", &dest, &src1, &op, &src2) == 4) {
-                if (op == '+') opcode = 1;
-                else if (op == '-') opcode = 2;
-                else if (op == '*') opcode = 3;
-                else if (op == '/') opcode = 4;
+                if (op == '+') opcode = OP_ADD;
+                else if (op == '-') opcode = OP_SUB;
+                else if (op == '*') opcode = OP_MUL;
+                else if (op == '/') opcode = OP_DIV;
                 else printf("Unknown operator %c\n Failed to compile the instructions.\n", op);
                 fprintf(output, "%d %d %d %d\n", opcode, dest, src1, src2);
             } else if (sscanf(buffer, "x%d = %d", &dest, &value) == 2){
