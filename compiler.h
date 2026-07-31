@@ -1,0 +1,5 @@
+#ifdef COMPILER_H
+#define COMPILER_H
+
+void compile();
+#endif
