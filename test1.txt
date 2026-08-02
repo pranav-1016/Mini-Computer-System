@@ -1,0 +1,29 @@
+Read x1, 1
+Read x2, 2
+x1 = x1 + x2
+
+Read x2, 3
+x1 = x1 + x2
+
+Read x2, 4
+x1 = x1 + x2
+
+Read x2, 5
+x1 = x1 + x2
+
+Read x2, 6
+x1 = x1 + x2
+
+Read x2, 7
+x1 = x1 + x2
+
+Read x2, 8
+x1 = x1 + x2
+
+Read x2, 9
+x1 = x1 + x2
+
+Read x2, 10
+x1 = x1 + x2
+
+Write x1, 11

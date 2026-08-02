@@ -1,0 +1,20 @@
+# Data[0] = real part of z1 = 2
+# Data[1] = imaginary part of z1 = 3
+# Data[2] = real part of z2 = 4
+# Data[3] = imaginary part of z2 = 5
+
+Read x1, 0
+Read x2, 1
+Read x3, 2
+Read x4, 3
+
+x5 = x1 * x3
+x6 = x2 * x4
+x7 = x5 - x6
+
+x8 = x1 * x4
+x9 = x2 * x3
+x10 = x8 + x9
+
+Write x7, 4
+Write x10, 5

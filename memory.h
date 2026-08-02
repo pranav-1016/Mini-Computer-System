@@ -17,7 +17,7 @@
 extern unsigned char Instruction[MEM_SIZE];
 extern int Data[MEM_SIZE];
 
-void initialise();
-void finalize();
+void initialise(const char *filename);
+void finalize(const char *filename);
 
 #endif

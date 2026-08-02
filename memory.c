@@ -10,7 +10,7 @@ void load_the_program() {
         printf("program.byte not found or not opened >>>>>>\n");
         return;
     }
-    printf("Reading from the program.byte file ....\n");
+    printf("Loading program from the program.byte file ....\n");
     int idx = 0;
     int tmp;
     while (idx < MEM_SIZE && fscanf(program, "%d", &tmp) == 1) {
@@ -19,13 +19,13 @@ void load_the_program() {
     fclose(program);
 }
 
-void load_the_data() {
-    FILE *data = fopen("data.byte", "r");
+void load_the_data(const char *filename) {
+    FILE *data = fopen(filename, "r");
     if (data == NULL) {
-        printf("data.byte not found or not opened >>>>>>\n");
+        printf("%s not found or not opened >>>>>>\n", filename);
         return;
     }
-    printf("Reading from the data.byte file ....\n");
+    printf("Loading data from the %s file ....\n", filename);
     int idx = 0;
     while (idx < MEM_SIZE && fscanf(data, "%d", &Data[idx]) == 1) {
         idx++;
@@ -33,20 +33,20 @@ void load_the_data() {
     fclose(data);
 }
 
-void initialise() {
+void initialise(const char *filename) {
     
     //read the data from “program.byte” and populate Instruction memory
     load_the_program();
 
     //read the data from “data.byte” and populate data memory. 
-    load_the_data();
+    load_the_data(filename);
 }
 
-void finalize() {
-    printf("Code Executed and finally writing the data.byte FILE\n");
-    FILE *data = fopen("data.byte", "w");
+void finalize(const char *filename) {
+    printf("Code Executed and finally writing the data FILE %s \n", filename);
+    FILE *data = fopen(filename, "w");
     if (data == NULL) {
-        printf("Unable to open data.byte for writing >>>>>>\n");
+        printf("Unable to open %s for writing >>>>>>\n", filename);
         return;
     }
     for (int i = 0; i < MEM_SIZE; i++) {

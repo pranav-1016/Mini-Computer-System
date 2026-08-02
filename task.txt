@@ -1,0 +1,1 @@
+- make a command line argument to pass the text program file

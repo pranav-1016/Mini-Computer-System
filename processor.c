@@ -80,6 +80,7 @@ void execute() {
             break;
         }
         Data[src1] = Register[dest];
+        printf("Write operation : %d %d\n", src1, Register[dest]);
         break;
 
     case OP_MOV:

@@ -3,8 +3,8 @@
 #include "compiler.h"
 #include "memory.h"
 
-void compile() {
-    FILE *input = fopen("input.txt", "r");
+void compile(const char *filename) {
+    FILE *input = fopen(filename, "r");
     FILE *output = fopen("program.byte", "w");
     
     if (input == NULL) {
@@ -25,7 +25,7 @@ void compile() {
             // Parse the read instruction
             int reg, address;
             sscanf(buffer, "Read x%d, %d", &reg, &address);
-            // printf("Read Instruction with reg: %d add: %d\n", reg, address);
+
             fprintf(output, "5 %d %d 0\n", reg, address);
 
 
@@ -33,7 +33,7 @@ void compile() {
             // Parse the write instruction
             int reg, address;
             sscanf(buffer, "Write x%d, %d", &reg, &address);
-            // printf("Write Instruction with reg: %d add: %d\n", reg, address);
+
             fprintf(output, "6 %d %d 0\n", reg, address);
 
         } else {
