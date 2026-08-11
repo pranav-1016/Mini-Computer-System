@@ -143,13 +143,13 @@ void compile(const char *filename) {
         instruction_index++;
     }
 
+    rewind(input);
+    instruction_index = 0;
+
     /*
      * PASS 2:
      * Generate bytecode.
      */
-    rewind(input);
-    instruction_index = 0;
-
     while (fgets(buffer, sizeof(buffer), input)) {
         char *comment = strchr(buffer, '%');
 
@@ -157,15 +157,19 @@ void compile(const char *filename) {
             *comment = '\0';
         }
 
-        if (buffer[0] == '\0' || buffer[0] == '\n' || buffer[0] == '.') {
+        if (buffer[0] == '\0' || buffer[0] == '\n') {
             continue;
         }
 
-        int dest, src1, src2, value, opcode;
+        if (buffer[0] == '.') {
+            continue;
+        }
+
+        int dest, src1, src2, value;
         char op;
 
         /*
-         * Legacy READ:
+         * Legacy Read:
          * Read x1, 10
          */
         if (strncmp(buffer, "Read", 4) == 0) {
@@ -181,13 +185,13 @@ void compile(const char *filename) {
                 continue;
             }
 
-            fprintf(output, "%X %X %X 0\n", OP_READ, reg, address);
+            fprintf(output, "%d %d %d 0\n", OP_READ, reg, address);
             instruction_index++;
             continue;
         }
 
         /*
-         * Legacy WRITE:
+         * Legacy Write:
          * Write x1, 10
          */
         if (strncmp(buffer, "Write", 5) == 0) {
@@ -203,13 +207,13 @@ void compile(const char *filename) {
                 continue;
             }
 
-            fprintf(output, "%X %X %X 0\n", OP_WRITE, reg, address);
+            fprintf(output, "%d %d %d 0\n", OP_WRITE, reg, address);
             instruction_index++;
             continue;
         }
 
         /*
-         * Memory READ with register address:
+         * Memory read:
          * x1 = [x2]
          */
         if (sscanf(buffer, "x%d = [x%d]", &dest, &src1) == 2) {
@@ -218,29 +222,29 @@ void compile(const char *filename) {
                 continue;
             }
 
-            fprintf(output, "%X %X %X 0\n", OP_READ, dest, src1);
+            fprintf(output, "%d %d %d 0\n", OP_READ, dest, src1);
             instruction_index++;
             continue;
         }
 
         /*
-         * Memory READ with constant address:
+         * Memory read with constant:
          * x1 = [100]
          */
         if (sscanf(buffer, "x%d = [%d]", &dest, &value) == 2) {
             if (!is_valid_register(dest) || !is_valid_constant(value)) {
-                printf("Invalid operand in memory read: %s\n", buffer);
+                printf("Invalid operand in constant memory read: %s\n", buffer);
                 continue;
             }
 
-            fprintf(output, "%X %X %X 0\n", OP_READ_CONST, dest, value);
+            fprintf(output, "%d %d %d 0\n", OP_READ_CONST, dest, value);
             instruction_index++;
             continue;
         }
 
         /*
-         * Memory WRITE with register address:
-         * [x1] = x2
+         * Memory write:
+         * [x2] = x1
          */
         if (sscanf(buffer, "[x%d] = x%d", &dest, &src1) == 2) {
             if (!is_valid_register(dest) || !is_valid_register(src1)) {
@@ -248,45 +252,37 @@ void compile(const char *filename) {
                 continue;
             }
 
-            fprintf(output, "%X %X %X 0\n", OP_WRITE, dest, src1);
+            fprintf(output, "%d %d %d 0\n", OP_WRITE, dest, src1);
             instruction_index++;
             continue;
         }
 
         /*
-         * Memory WRITE with constant address:
-         * [100] = x2
+         * Memory write with constant:
+         * [100] = x1
          */
         if (sscanf(buffer, "[%d] = x%d", &value, &src1) == 2) {
             if (!is_valid_constant(value) || !is_valid_register(src1)) {
-                printf("Invalid operand in memory write: %s\n", buffer);
+                printf("Invalid operand in constant memory write: %s\n", buffer);
                 continue;
             }
 
-            fprintf(output, "%X %X %X 0\n", OP_WRITE_CONST, src1, value);
+            fprintf(output, "%d %d %d 0\n", OP_WRITE_CONST, src1, value);
             instruction_index++;
             continue;
         }
 
         /*
-         * Arithmetic with registers:
+         * Arithmetic:
          * x1 = x2 + x3
          */
         if (sscanf(buffer, "x%d = x%d %c x%d", &dest, &src1, &op, &src2) == 4) {
-            opcode = -1;
+            int opcode = -1;
 
-            if (op == '+') {
-                opcode = OP_ADD;
-            }
-            else if (op == '-') {
-                opcode = OP_SUB;
-            }
-            else if (op == '*') {
-                opcode = OP_MUL;
-            }
-            else if (op == '/') {
-                opcode = OP_DIV;
-            }
+            if (op == '+') opcode = OP_ADD;
+            else if (op == '-') opcode = OP_SUB;
+            else if (op == '*') opcode = OP_MUL;
+            else if (op == '/') opcode = OP_DIV;
 
             if (opcode == -1) {
                 printf("Unknown operator %c\n", op);
@@ -298,30 +294,22 @@ void compile(const char *filename) {
                 continue;
             }
 
-            fprintf(output, "%X %X %X %X\n", opcode, dest, src1, src2);
+            fprintf(output, "%d %d %d %d\n", opcode, dest, src1, src2);
             instruction_index++;
             continue;
         }
 
         /*
-         * Arithmetic with constant:
-         * x1 = x2 + 30
+         * Constant arithmetic:
+         * x1 = x2 + 10
          */
         if (sscanf(buffer, "x%d = x%d %c %d", &dest, &src1, &op, &value) == 4) {
-            opcode = -1;
+            int opcode = -1;
 
-            if (op == '+') {
-                opcode = OP_ADD_CONST;
-            }
-            else if (op == '-') {
-                opcode = OP_SUB_CONST;
-            }
-            else if (op == '*') {
-                opcode = OP_MUL_CONST;
-            }
-            else if (op == '/') {
-                opcode = OP_DIV_CONST;
-            }
+            if (op == '+') opcode = OP_ADD_CONST;
+            else if (op == '-') opcode = OP_SUB_CONST;
+            else if (op == '*') opcode = OP_MUL_CONST;
+            else if (op == '/') opcode = OP_DIV_CONST;
 
             if (opcode == -1) {
                 printf("Unknown operator %c\n", op);
@@ -333,7 +321,7 @@ void compile(const char *filename) {
                 continue;
             }
 
-            fprintf(output, "%X %X %X %X\n", opcode, dest, src1, value);
+            fprintf(output, "%d %d %d %d\n", opcode, dest, src1, value);
             instruction_index++;
             continue;
         }
@@ -348,7 +336,7 @@ void compile(const char *filename) {
                 continue;
             }
 
-            fprintf(output, "%X %X %X 0\n", OP_MOV, dest, src1);
+            fprintf(output, "%d %d %d 0\n", OP_MOV, dest, src1);
             instruction_index++;
             continue;
         }
@@ -363,7 +351,7 @@ void compile(const char *filename) {
                 continue;
             }
 
-            fprintf(output, "%X %X %X 0\n", OP_MOV_CONST, dest, value);
+            fprintf(output, "%d %d %d 0\n", OP_MOV_CONST, dest, value);
             instruction_index++;
             continue;
         }
@@ -395,7 +383,7 @@ void compile(const char *filename) {
                         continue;
                     }
 
-                    fprintf(output, "%X 0 0 %X\n", branch_opcode, offset & 0xFF);
+                    fprintf(output, "%d 0 0 %d\n", branch_opcode, offset & 0xFF);
                     instruction_index++;
                     continue;
                 }

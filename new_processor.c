@@ -127,7 +127,7 @@ void execute() {
 
     case OP_READ:
         if (dest < 0 || dest >= NO_OF_REGISTERS || src1 < 0 || src1 >= NO_OF_REGISTERS) {
-            printf("Invalid registers in READ (dest=%d, addr_reg=%d)\n", dest, src1);
+            printf("Invalid register index in READ (dest=%d, addr_reg=%d)\n", dest, src1);
             end_of_simulation = 1;
             break;
         }
@@ -139,9 +139,8 @@ void execute() {
         }
 
         Register[dest] = Data[Register[src1]];
-
-        printf("Read operation : Data[%d] = %d\n", Register[src1], Register[dest]);
-    break;
+        printf("Read operation : address=%d value=%d\n", Register[src1], Register[dest]);
+        break;
 
     case OP_READ_CONST:
         if (dest < 0 || dest >= NO_OF_REGISTERS || src1 < CONST_VALUE_MIN || src1 > CONST_VALUE_MAX) {
@@ -162,7 +161,7 @@ void execute() {
 
     case OP_WRITE:
         if (dest < 0 || dest >= NO_OF_REGISTERS || src1 < 0 || src1 >= NO_OF_REGISTERS) {
-            printf("Invalid registers in WRITE (addr_reg=%d, data_reg=%d)\n", dest, src1);
+            printf("Invalid register index in WRITE (addr_reg=%d, value_reg=%d)\n", dest, src1);
             end_of_simulation = 1;
             break;
         }
@@ -174,20 +173,24 @@ void execute() {
         }
 
         Data[Register[dest]] = Register[src1];
-
-        printf("Write operation : Data[%d] = %d\n", Register[dest], Register[src1]);
+        printf("Write operation : address=%d value=%d\n", Register[dest], Register[src1]);
         break;
 
     case OP_WRITE_CONST:
-        if (dest < 0 || dest >= NO_OF_REGISTERS || src1 < 0 || src1 >= DATA_MEM_SIZE) {
-            printf("Invalid indices in WRITE_CONST (reg=%d, addr=%d)\n", dest, src1);
+        if (dest < 0 || dest >= NO_OF_REGISTERS || src1 < CONST_VALUE_MIN || src1 > CONST_VALUE_MAX) {
+            printf("Invalid operand in WRITE_CONST (value_reg=%d, address=%d)\n", dest, src1);
+            end_of_simulation = 1;
+            break;
+        }
+
+        if (src1 >= DATA_MEM_SIZE) {
+            printf("Invalid memory address in WRITE_CONST (address=%d)\n", src1);
             end_of_simulation = 1;
             break;
         }
 
         Data[src1] = Register[dest];
-
-        printf("Write operation : Data[%d] = %d\n", src1, Register[dest]);
+        printf("Write constant operation : address=%d value=%d\n", src1, Register[dest]);
         break;
 
     case OP_MOV:

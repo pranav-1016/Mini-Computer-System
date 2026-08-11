@@ -34,3 +34,4 @@ int main(int argc, char *argv[]) {
     finalize(data_filename);
     return 0;
 }
+    
