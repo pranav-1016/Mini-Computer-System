@@ -26,6 +26,9 @@ void load_the_program() {
 
         Instruction[idx++] = (unsigned char)tmp;
     }
+    // for(int i=0; i < 20; i++) {
+    //     printf("This is the instruction %d %X\n", i, Instruction[i]);
+    // }
 
     fclose(program);
 }
@@ -74,8 +77,12 @@ void finalize(const char *filename) {
         return;
     }
 
-    for (int i = 0; i < DATA_MEM_SIZE; i++) {
-        fprintf(data, "%02X\n", (unsigned int)Data[i] & 0xFF);
+    for (int i = 0; i < DATA_MEM_SIZE; i += 4) {
+        fprintf(data, "%02X %02X %02X %02X\n",
+                (unsigned int)Data[i] & 0xFF,
+                (i + 1 < DATA_MEM_SIZE) ? (unsigned int)Data[i + 1] & 0xFF : 0,
+                (i + 2 < DATA_MEM_SIZE) ? (unsigned int)Data[i + 2] & 0xFF : 0,
+                (i + 3 < DATA_MEM_SIZE) ? (unsigned int)Data[i + 3] & 0xFF : 0);
     }
 
     fclose(data);

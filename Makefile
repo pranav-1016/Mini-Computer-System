@@ -18,3 +18,7 @@ memory.o: memory.c memory.h
 processor.o: processor.c processor.h
 	$(CC) $(CFLAGS) -c processor.c
 
+.PHONY: clean
+
+clean:
+	rm -f $(OBJS) $(TARGET)

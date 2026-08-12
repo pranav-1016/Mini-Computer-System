@@ -1,20 +1,26 @@
-# Data[0] = real part of z1 = 2
-# Data[1] = imaginary part of z1 = 3
-# Data[2] = real part of z2 = 4
-# Data[3] = imaginary part of z2 = 5
+% count positive numbers
+x1 = 0          % address of N
+x2 = [x1]       % N
 
-Read x1, 0
-Read x2, 1
-Read x3, 2
-Read x4, 3
+x3 = 4          % array address
+x4 = 0          % index
+x5 = 0          % positive count
 
-x5 = x1 * x3
-x6 = x2 * x4
-x7 = x5 - x6
+.loop
+x6 = x2 - x4
+BEQ .exit
 
-x8 = x1 * x4
-x9 = x2 * x3
-x10 = x8 + x9
+x7 = [x3]
+x8 = x7 - 0
+BLT .skip
 
-Write x7, 4
-Write x10, 5
+x5 = x5 + 1
+
+.skip
+x3 = x3 + 4
+x4 = x4 + 1
+BAL .loop
+
+.exit
+x1 = 16
+[x1] = x5

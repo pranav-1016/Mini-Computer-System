@@ -28,7 +28,7 @@
 #define OP_MOV_CONST 0x0F
 
 // Branch instructions start from 0x10
-#define OP_BRANCH 0x10
+// #define OP_BRANCH 0x10
 
 #define OP_BEQ 0x10
 #define OP_BNE 0x11

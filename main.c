@@ -23,12 +23,15 @@ int main(int argc, char *argv[]) {
     compile(input_filename);
     initialise(data_filename);
     reset();
+
     extern int end_of_simulation;
+    int i=0;
     while(!end_of_simulation) {
+        // printf("Instruction at 20 is : %X %X %X %X\n", Instruction[20], Instruction[21], Instruction[22], Instruction[23]);
         fetch();
         decode();
         execute();
-
+        i++;
     }
 
     finalize(data_filename);

@@ -2,10 +2,20 @@
 #include "memory.h"
 #include "processor.h"
 
-int Register[];
-int PC, opcode, dest, src1, src2;
+int Register[NO_OF_REGISTERS] = {0};
+
+int PC = 0;
+int opcode = 0;
+int dest = 0;
+int src1 = 0;
+int src2 = 0;
+
 int end_of_simulation = 0;
-int Z, N, C, V;
+
+int Z = 0;
+int N = 0;
+int C = 0;
+int V = 0;
 
 void update_flags(int a, int b, int result, int is_sub) {
     Z = (result == 0) ? 1 : 0;
@@ -45,17 +55,26 @@ void fetch() {
         return;
     }
 
+    printf("PC Fetching at Fetch: PC = %d\n", PC);
+
+    // printf("Instruction array: %02X %02X %02X %02X\n",
+    //        Instruction[0],
+    //        Instruction[1],
+    //        Instruction[2],
+    //        Instruction[3]);
+
     opcode = Instruction[PC];
     dest = Instruction[PC + 1];
     src1 = Instruction[PC + 2];
     src2 = Instruction[PC + 3];
-
+    printf("Running this instructions : %X %X %X %X\n", opcode, dest, src1, src2);
     PC = PC + 4;
 }
 
 void decode() {}
 
 void execute() {
+    printf("EXECUTE: opcode=%02X\n", opcode);
     switch (opcode) {
     case OP_HALT:
         end_of_simulation = 1;
@@ -73,11 +92,16 @@ void execute() {
 
         if (opcode == OP_ADD) {
             Register[dest] = Register[src1] + Register[src2];
+            printf("Add operation is running %d %d %d", Register[dest], Register[src1] + Register[src2]);
             update_flags(Register[src1], Register[src2], Register[dest], 0);
         }
         else if (opcode == OP_SUB) {
+            printf("SUB ENTERED: dest=%d src1=%d src2=%d\n", dest, src1, src2);
             Register[dest] = Register[src1] - Register[src2];
+            printf("SUB RESULT: %d - %d = %d\n",
+           Register[src1], Register[src2], Register[dest]);
             update_flags(Register[src1], Register[src2], Register[dest], 1);
+            printf("SUB FLAGS: Z=%d N=%d C=%d V=%d\n", Z, N, C, V);
         }
         else if (opcode == OP_MUL) {
             Register[dest] = Register[src1] * Register[src2];
@@ -212,90 +236,94 @@ void execute() {
 
     case OP_BEQ:
         if (Z == 1) {
-            PC = PC + ((signed char)src2 * 4);
+            PC = PC - 4 + ((signed char)src2 * 4);
         }
         break;
 
     case OP_BNE:
         if (Z == 0) {
-            PC = PC + ((signed char)src2 * 4);
+            PC = PC - 4 + ((signed char)src2 * 4);
         }
         break;
 
     case OP_BCS:
         if (C == 1) {
-            PC = PC + ((signed char)src2 * 4);
+            PC = PC - 4 + ((signed char)src2 * 4);
         }
         break;
 
     case OP_BCC:
         if (C == 0) {
-            PC = PC + ((signed char)src2 * 4);
+            PC = PC - 4 + ((signed char)src2 * 4);
         }
         break;
 
     case OP_BMI:
         if (N == 1) {
-            PC = PC + ((signed char)src2 * 4);
+            PC = PC - 4 + ((signed char)src2 * 4);
         }
         break;
 
     case OP_BPL:
         if (N == 0) {
-            PC = PC + ((signed char)src2 * 4);
+            PC = PC - 4 + ((signed char)src2 * 4);
         }
         break;
 
     case OP_BVS:
         if (V == 1) {
-            PC = PC + ((signed char)src2 * 4);
+            PC = PC - 4 + ((signed char)src2 * 4);
         }
         break;
 
     case OP_BVC:
         if (V == 0) {
-            PC = PC + ((signed char)src2 * 4);
+            PC = PC - 4 + ((signed char)src2 * 4);
         }
         break;
 
     case OP_BHI:
         if (C == 1 && Z == 0) {
-            PC = PC + ((signed char)src2 * 4);
+            PC = PC - 4 + ((signed char)src2 * 4);
         }
         break;
 
     case OP_BLS:
         if (C == 0 || Z == 1) {
-            PC = PC + ((signed char)src2 * 4);
+            PC = PC - 4 + ((signed char)src2 * 4);
         }
         break;
 
     case OP_BGE:
         if (N == V) {
-            PC = PC + ((signed char)src2 * 4);
+            PC = PC - 4 + ((signed char)src2 * 4);
         }
         break;
 
     case OP_BLT:
         if (N != V) {
-            PC = PC + ((signed char)src2 * 4);
+            PC = PC - 4 + ((signed char)src2 * 4);
         }
         break;
 
     case OP_BGT:
         if (Z == 0 && N == V) {
-            PC = PC + ((signed char)src2 * 4);
+            PC = PC - 4 + ((signed char)src2 * 4);
         }
         break;
 
     case OP_BLE:
         if (Z == 1 || N != V) {
-            PC = PC + ((signed char)src2 * 4);
+            PC = PC - 4 + ((signed char)src2 * 4);
         }
         break;
 
     case OP_BAL:
-        PC = PC + ((signed char)src2 * 4);
+        printf("PC on BAL : %d\n", PC);
+
+        PC = PC - 4 + ((signed char)src2 * 4);
+
+        printf("new PC on BAL : %d\n", PC);
         break;
     default:
         printf("Invalid opcode: %d\n", opcode);

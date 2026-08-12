@@ -71,6 +71,19 @@ int is_valid_label(const char *label) {
 
     return 1;
 }
+int isBlankLine(const char *line) {
+    for (int i = 0; line[i] != '\0'; i++) {
+        if (line[i] != ' ' &&
+            line[i] != '\t' &&
+            line[i] != '\n' &&
+            line[i] != '\r')
+        {
+            return 0;   // not blank
+        }
+    }
+
+    return 1;           // completely blank
+}
 
 void compile(const char *filename) {
     FILE *input = fopen(filename, "r");
@@ -100,6 +113,7 @@ void compile(const char *filename) {
         if (comment != NULL) {
             *comment = '\0';
         }
+        if (isBlankLine(buffer)) continue;
 
         if (buffer[0] == '\0' || buffer[0] == '\n') {
             continue;
@@ -373,6 +387,10 @@ void compile(const char *filename) {
          * BEQ .loop
          * BAL .loop
          */
+        printf("These are the labels in program\n");
+        for (int i=0; i < label_count; i++) {
+            printf("%s\n", labels[i].name);
+        }
         {
             char branch[10];
             char label[MAX_LABEL_LENGTH];
