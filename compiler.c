@@ -26,6 +26,29 @@ int find_label(const char *name) {
     return -1;
 }
 
+char* extract_filename(const char *filename) {
+    if (filename == NULL) return NULL;
+
+    printf("Entering extract filename function: %s\n", filename);
+
+    // Create a writable heap copy of the read-only string
+    char *filename_copy = strdup(filename);
+    if (filename_copy == NULL) return NULL;
+
+    char *token = strtok(filename_copy, ".");
+    
+    // Allocate buffer for returned string so we can free the original copy
+    char *result = NULL;
+    if (token != NULL) {
+        result = strdup(token);
+    }
+
+    free(filename_copy); // Clean up the working copy
+
+    printf("Extracted token: %s\n", result);
+    return result; // Remember to free(result) in the caller!
+}
+
 int get_branch_opcode(const char *branch) {
     if (strcmp(branch, "BEQ") == 0) return 0x10;
     if (strcmp(branch, "BNE") == 0) return 0x11;
@@ -48,6 +71,9 @@ int get_branch_opcode(const char *branch) {
 
 int is_valid_register(int reg) {
     return reg >= 0 && reg <= 255;
+}
+int is_valid_vector_register(int reg) {
+    return reg >= 0 && reg <= 31;
 }
 
 int is_valid_constant(int value) {
@@ -85,20 +111,39 @@ int isBlankLine(const char *line) {
     return 1;           // completely blank
 }
 
-void compile(const char *filename) {
-    FILE *input = fopen(filename, "r");
-    FILE *output = fopen("program.byte", "w");
+void print_labels() {
+    printf("Labels found (%d):\n", label_count);
+    if (label_count == 0) {
+        printf("  <none>\n");
+        return;
+    }
 
+    for (int i = 0; i < label_count; i++) {
+        printf("  %s -> instruction %d\n", labels[i].name, labels[i].instruction_index);
+    }
+}
+
+char* compile(const char *filename) {
+    // extract the filename without extension
+    printf("Enterting the compile method with filename %s  ....\n", filename);
+    char *raw_filename = extract_filename(filename);
+    printf("this will be the filename for program byte file %s", raw_filename);
+    FILE *input = fopen(filename, "r");
+    FILE *output = fopen(raw_filename, "w");
+
+    printf("%s filename will be opened\n", filename);
     if (input == NULL) {
         printf("File not found or not opened >>>>>\n");
         return;
     }
-
+    printf("%s output file will be created\n", raw_filename);
     if (output == NULL) {
         printf("Unable to create program.byte >>>>>\n");
         fclose(input);
         return;
     }
+
+    printf("Compiling %s...\n", filename);
 
     char buffer[100];
     int instruction_index = 0;
@@ -107,6 +152,8 @@ void compile(const char *filename) {
      * PASS 1:
      * Find all labels and determine their instruction positions.
      */
+    printf("Pass 1: scanning labels and instruction positions...\n");
+    label_count = 0;
     while (fgets(buffer, sizeof(buffer), input)) {
         char *comment = strchr(buffer, '%');
 
@@ -144,23 +191,27 @@ void compile(const char *filename) {
                 printf("Too many labels in program.\n");
                 fclose(input);
                 fclose(output);
-                return;
+                return NULL;
             }
 
             strcpy(labels[label_count].name, label);
             labels[label_count].instruction_index = instruction_index;
             label_count++;
 
+            printf("  Label found: %s -> instruction %d\n", label, instruction_index);
             continue;
         }
 
         instruction_index++;
     }
 
+    print_labels();
+
     /*
      * PASS 2:
      * Generate bytecode.
      */
+    printf("Pass 2: generating bytecode...\n");
     rewind(input);
     instruction_index = 0;
 
@@ -170,13 +221,15 @@ void compile(const char *filename) {
         if (comment != NULL) {
             *comment = '\0';
         }
-
+        if (isBlankLine(buffer)) continue;
         if (buffer[0] == '\0' || buffer[0] == '\n' || buffer[0] == '.') {
             continue;
         }
 
         int dest, src1, src2, value, opcode;
         char op;
+
+        printf("Compiling instruction %d: %s\n", instruction_index, buffer);
 
         /*
          * Legacy READ:
@@ -196,6 +249,7 @@ void compile(const char *filename) {
             }
 
             fprintf(output, "%X %X %X 0\n", OP_READ, reg, address);
+            printf("  -> %02X %02X %02X 00\n", OP_READ, reg, address);
             instruction_index++;
             continue;
         }
@@ -218,6 +272,7 @@ void compile(const char *filename) {
             }
 
             fprintf(output, "%X %X %X 0\n", OP_WRITE, reg, address);
+            printf("  -> %02X %02X %02X 00\n", OP_WRITE, reg, address);
             instruction_index++;
             continue;
         }
@@ -233,6 +288,7 @@ void compile(const char *filename) {
             }
 
             fprintf(output, "%X %X %X 0\n", OP_READ, dest, src1);
+            printf("  -> %02X %02X %02X 00\n", OP_READ, dest, src1);
             instruction_index++;
             continue;
         }
@@ -248,6 +304,7 @@ void compile(const char *filename) {
             }
 
             fprintf(output, "%X %X %X 0\n", OP_READ_CONST, dest, value);
+            printf("  -> %02X %02X %02X 00\n", OP_READ_CONST, dest, value);
             instruction_index++;
             continue;
         }
@@ -263,6 +320,7 @@ void compile(const char *filename) {
             }
 
             fprintf(output, "%X %X %X 0\n", OP_WRITE, dest, src1);
+            printf("  -> %02X %02X %02X 00\n", OP_WRITE, dest, src1);
             instruction_index++;
             continue;
         }
@@ -278,6 +336,59 @@ void compile(const char *filename) {
             }
 
             fprintf(output, "%X %X %X 0\n", OP_WRITE_CONST, src1, value);
+            printf("  -> %02X %02X %02X 00\n", OP_WRITE_CONST, src1, value);
+            instruction_index++;
+            continue;
+        }
+
+        /*
+            Read, Write on vectors
+        */
+        // Read vector with variable
+        if (sscanf(buffer, "v%d = [x%d]", &dest, &src1) == 2) {
+            if (!is_valid_vector_register(dest) || !is_valid_register(src1)) {
+                printf("Invalid register in memory read: %s\n", buffer);
+                continue;
+            }
+
+            fprintf(output, "%X %X %X 0\n", OP_VEC_READ, dest, src1);
+            printf("  -> %02X %02X %02X 00\n", OP_VEC_READ, dest, src1);
+            instruction_index++;
+            continue;
+        }
+        // Read vector with constant
+        if (sscanf(buffer, "v%d = [%d]", &dest, &value) == 2) {
+            if (!is_valid_vector_register(dest) || !is_valid_constant(value)) {
+                printf("Invalid operand in memory read: %s\n", buffer);
+                continue;
+            }
+
+            fprintf(output, "%X %X %X 0\n", OP_VEC_READ_CONST, dest, value);
+            printf("  -> %02X %02X %02X 00\n", OP_VEC_READ_CONST, dest, value);
+            instruction_index++;
+            continue;
+        }
+        // Write vector with variable
+        if (sscanf(buffer, "[x%d] = v%d", &dest, &src1) == 2) {
+            if (!is_valid_register(dest) || !is_valid_vector_register(src1)) {
+                printf("Invalid register in memory write: %s\n", buffer);
+                continue;
+            }
+
+            fprintf(output, "%X %X %X 0\n", OP_VEC_WRITE, dest, src1);
+            printf("  -> %02X %02X %02X 00\n", OP_VEC_WRITE, dest, src1);
+            instruction_index++;
+            continue;
+        }
+        // Write vector with constant
+        if (sscanf(buffer, "[%d] = v%d", &value, &src1) == 2) {
+            if (!is_valid_constant(value) || !is_valid_vector_register(src1)) {
+                printf("Invalid operand in memory write: %s\n", buffer);
+                continue;
+            }
+
+            fprintf(output, "%X %X %X 0\n", OP_VEC_WRITE_CONST, src1, value);
+            printf("  -> %02X %02X %02X 00\n", OP_VEC_WRITE_CONST, src1, value);
             instruction_index++;
             continue;
         }
@@ -313,6 +424,7 @@ void compile(const char *filename) {
             }
 
             fprintf(output, "%X %X %X %X\n", opcode, dest, src1, src2);
+            printf("  -> %02X %02X %02X %02X\n", opcode, dest, src1, src2);
             instruction_index++;
             continue;
         }
@@ -348,6 +460,103 @@ void compile(const char *filename) {
             }
 
             fprintf(output, "%X %X %X %X\n", opcode, dest, src1, value);
+            printf("  -> %02X %02X %02X %02X\n", opcode, dest, src1, value);
+            instruction_index++;
+            continue;
+        }
+
+        /* 
+            Vector Arithmetic with variables
+        */
+        if (sscanf(buffer, "v%d = v%d %c v%d", &dest, &src1, &op, &src2) == 4) {
+            opcode = -1;
+
+            if (op == '+') {
+                opcode = OP_VEC_ADD;
+            }
+            else if (op == '-') {
+                opcode = OP_VEC_SUB;
+            }
+            else if (op == '*') {
+                opcode = OP_VEC_MUL;
+            }
+
+            if (opcode == -1) {
+                printf("Unknown operator %c\n", op);
+                continue;
+            }
+
+            if (!is_valid_vector_register(dest) || !is_valid_vector_register(src1) || !is_valid_vector_register(src2)) {
+                printf("Invalid register in arithmetic: %s\n", buffer);
+                continue;
+            }
+
+            fprintf(output, "%X %X %X %X\n", opcode, dest, src1, src2);
+            printf("  -> %02X %02X %02X %02X\n", opcode, dest, src1, src2);
+            instruction_index++;
+            continue;
+        }
+
+        /*
+           Vector Arithmetic with constant 
+        */
+        if (sscanf(buffer, "v%d = v%d %c %d", &dest, &src1, &op, &value) == 4) {
+            opcode = -1;
+
+            if (op == '+') {
+                opcode = OP_VEC_ADD_CONST;
+            }
+            else if (op == '-') {
+                opcode = OP_VEC_SUB_CONST;
+            }
+            else if (op == '*') {
+                opcode = OP_VEC_MUL_CONST;
+            }
+
+            if (opcode == -1) {
+                printf("Unknown operator %c\n", op);
+                continue;
+            }
+
+            if (!is_valid_vector_register(dest) || !is_valid_vector_register(src1) || !is_valid_vector_register(value)) {
+                printf("Invalid operand in constant arithmetic: %s\n", buffer);
+                continue;
+            }
+
+            fprintf(output, "%X %X %X %X\n", opcode, dest, src1, value);
+            printf("  -> %02X %02X %02X %02X\n", opcode, dest, src1, value);
+            instruction_index++;
+            continue;
+        }
+
+        /*
+            Vector arithmetic with variable registers
+        */
+        if (sscanf(buffer, "v%d = v%d %c x%d", &dest, &src1, &op, &value) == 4) {
+            opcode = -1;
+
+            if (op == '+') {
+                opcode = OP_VEC_ADD_REG;
+            }
+            else if (op == '-') {
+                opcode = OP_VEC_SUB_REG;
+            }
+            else if (op == '*') {
+                opcode = OP_VEC_MUL_REG;
+            }
+
+            if (opcode == -1) {
+                printf("Unknown operator %c\n", op);
+                continue;
+            }
+
+            if (!is_valid_vector_register(dest) || !is_valid_vector_register(src1) || !is_valid_register(value)) {
+                printf("Invalid operand in constant arithmetic: %s\n", buffer);
+                continue;
+            }
+
+            fprintf(output, "%X %X %X %X\n", opcode, dest, src1, value);
+            printf("  -> %02X %02X %02X %02X\n", opcode, dest, src1, value);
             instruction_index++;
             continue;
         }
@@ -363,6 +572,7 @@ void compile(const char *filename) {
             }
 
             fprintf(output, "%X %X %X 0\n", OP_MOV, dest, src1);
+            printf("  -> %02X %02X %02X 00\n", OP_MOV, dest, src1);
             instruction_index++;
             continue;
         }
@@ -378,19 +588,11 @@ void compile(const char *filename) {
             }
 
             fprintf(output, "%X %X %X 0\n", OP_MOV_CONST, dest, value);
+            printf("  -> %02X %02X %02X 00\n", OP_MOV_CONST, dest, value);
             instruction_index++;
             continue;
         }
 
-        /*
-         * Branch:
-         * BEQ .loop
-         * BAL .loop
-         */
-        printf("These are the labels in program\n");
-        for (int i=0; i < label_count; i++) {
-            printf("%s\n", labels[i].name);
-        }
         {
             char branch[10];
             char label[MAX_LABEL_LENGTH];
@@ -414,6 +616,7 @@ void compile(const char *filename) {
                     }
 
                     fprintf(output, "%X 0 0 %X\n", branch_opcode, offset & 0xFF);
+                    printf("  -> %02X 00 00 %02X\n", branch_opcode, offset & 0xFF);
                     instruction_index++;
                     continue;
                 }
@@ -424,7 +627,11 @@ void compile(const char *filename) {
     }
 
     fprintf(output, "0 0 0 0\n");
+    printf("  -> 00 00 00 00 (HALT)\n");
+    printf("Compilation complete. Wrote program.byte\n");
 
     fclose(input);
     fclose(output);
+
+    return raw_filename;
 }

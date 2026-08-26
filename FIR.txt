@@ -1,0 +1,57 @@
+% FIR Filter Implementation
+v1 = [4]         % Read 8 weights into vector v1 from addr 4
+x1 = 0           % k = 0 (loop counter)
+x2 = [0]         % Read N (size of the array) from addr 0
+x3 = x2 - 8      % Loop limit = N - 8 
+x10 = 36         % Base address for input array (starts at addr 36)
+x11 = 256        % Base address for output array (starts at addr 256)
+
+.loop
+x5 = x1 - x3     % Compare k with N-8
+BGE .exit        % Branch to .exit if k >= N-8
+
+% Calculate current input address: input_addr = 36 + (k * 4)
+x4 = x1 * 4      
+x4 = x4 + x10    
+v2 = [x4]        % Read 8 inputs starting at input_addr into vector v2
+
+v3 = v1 * v2     % Vector element-wise multiplication: v3 = weights * inputs
+
+% Write to memory (addr 164) to extract the vector values as scalars
+x12 = 256       
+[x12] = v3       
+
+% Extract and sum the 8 integer values sequentially
+x12 = 500        
+x6 = [x12]       % Read index 0 into sum (x6)
+x12 = x12 + 4    
+x7 = [x12]       % Read index 1
+x6 = x6 + x7     % sum = sum + index 1
+x12 = x12 + 4    
+x7 = [x12]       % Read index 2
+x6 = x6 + x7
+x12 = x12 + 4    
+x7 = [x12]       % Read index 3
+x6 = x6 + x7
+x12 = x12 + 4    
+x7 = [x12]       % Read index 4
+x6 = x6 + x7
+x12 = x12 + 4    
+x7 = [x12]       % Read index 5
+x6 = x6 + x7
+x12 = x12 + 4    
+x7 = [x12]       % Read index 6
+x6 = x6 + x7
+x12 = x12 + 4    
+x7 = [x12]       % Read index 7
+x6 = x6 + x7
+
+% Write the final scalar sum to the output array at address 256 + (k * 4)
+x13 = x1 * 4     
+x13 = x13 + x11  
+[x13] = x6       
+
+x1 = x1 + 1      % k++
+BAL .loop        % Branch back to .loop
+
+.exit

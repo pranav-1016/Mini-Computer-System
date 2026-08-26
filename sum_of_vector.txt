@@ -1,0 +1,20 @@
+x1 = 0
+x2 = [x1]       % x2 = N
+x3 = x1 + 4     % A address = 4
+
+x4 = x2 * 4
+x4 = x4 + 4     % B address = 4 + 4N
+
+x255 = x2 * 8
+x255 = x255 + 4 % result address = 4 + 8N
+
+.addbatchAB
+v1 = [x3]
+v2 = [x4]
+v3 = v1 + v2
+[x255] = v3
+
+x2 = x2 - 8
+BNE .addbatchAB
+
+.exit

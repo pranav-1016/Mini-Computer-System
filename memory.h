@@ -4,6 +4,7 @@
 /* Memory constants */
 #define INSTRUCTION_MEM_SIZE 256
 #define DATA_MEM_SIZE 4096
+#define NP 4
 
 /* Opcode constants */
 #define OP_HALT 0x00
@@ -27,9 +28,25 @@
 #define OP_WRITE_CONST 0x0E
 #define OP_MOV_CONST 0x0F
 
-// Branch instructions start from 0x10
-// #define OP_BRANCH 0x10
+// Vector Instructions
+#define OP_VEC_ADD 0x21
+#define OP_VEC_SUB 0x22
+#define OP_VEC_MUL 0x23
+#define OP_VEC_READ 0x24
+#define OP_VEC_WRITE 0x25
 
+#define OP_VEC_ADD_CONST 0x29
+#define OP_VEC_SUB_CONST 0x2A
+#define OP_VEC_MUL_CONST 0x2B
+#define OP_VEC_READ_CONST 0x2C
+#define OP_VEC_WRITE_CONST 0x2E
+
+// Vector instructions where register value is added to vector
+#define OP_VEC_ADD_REG 0x3A
+#define OP_VEC_SUB_REG 0x3B
+#define OP_VEC_MUL_REG 0x3C
+
+// Branch instructions
 #define OP_BEQ 0x10
 #define OP_BNE 0x11
 #define OP_BCS 0x12
@@ -46,10 +63,12 @@
 #define OP_BLE 0x1D
 #define OP_BAL 0x1E
 
-extern unsigned char Instruction[INSTRUCTION_MEM_SIZE];
-extern int Data[DATA_MEM_SIZE];
+extern unsigned char Instruction[NP][INSTRUCTION_MEM_SIZE];
+extern int Data[NP][DATA_MEM_SIZE];
 
-void initialise(const char *filename);
-void finalize(const char *filename);
+void load_the_program(int proc_id, const char *filename);
+void load_the_data(int proc_id, const char *filename);
+void initialise(int proc_id, const char *program_file, const char *data_file);
+void finalize(int proc_id, const char *filename);
 
 #endif

@@ -1,40 +1,43 @@
-#include<stdio.h>
-#include "compiler.h"
-#include "memory.h"
+#include <stdio.h>
+#include <stdlib.h>
+#include "os.h"
+#include "queue.h"
 #include "processor.h"
 
-int main(int argc, char *argv[]) {
-    const char *input_filename = "input.txt";
-    const char *data_filename = "data.byte";
+extern CircularQueue readyQueue;
+extern CircularQueue waitQueue;
+extern int processor_busy[];
+extern int shell_active;
 
-    
-    if (argc == 3) {
-        input_filename = argv[1];
-        data_filename = argv[2];
-    } else if (argc != 1) {
-        printf("Either use \"./simulator.exe [input_filename] [data_filename]\" or \n");
-        printf("Use default \"./simulator.exe\", with default input.txt and data.byte \n");
-        
+// Helper check to see if any processor is currently executing
+int has_active_processes(void) {
+    if (!isEmpty(&readyQueue) || !isEmpty(&waitQueue)) {
         return 1;
     }
-    printf("Input program code : %s\n" , input_filename);
-    printf("Data file name: %s\n", data_filename);
-
-    compile(input_filename);
-    initialise(data_filename);
-    reset();
-
-    extern int end_of_simulation;
-    int i=0;
-    while(!end_of_simulation) {
-        // printf("Instruction at 20 is : %X %X %X %X\n", Instruction[20], Instruction[21], Instruction[22], Instruction[23]);
-        fetch();
-        decode();
-        execute();
-        i++;
+    for (int i = 0; i < NP; i++) { // NP = 4
+        if (processor_busy[i]) return 1;
     }
-
-    finalize(data_filename);
     return 0;
 }
-    
+
+int main(int argc, char **argv) {
+    // 1. Initialize terminal non-blocking IO and OS queues
+    init_terminal();
+
+    // 2. Load initial process if passed via command line arguments
+    if (argc >= 3) {
+        printf("Loading initial task: %s %s\n", argv[1], argv[2]);
+        loader(argv[1], argv[2]);
+    }
+
+    // 3. System execution loop: runs while shell is open OR tasks are still executing
+    while (shell_active || has_active_processes()) {
+        scheduler();
+    }
+
+    // 4. Restore terminal state before exiting
+    reset_keyboard();
+    printf("\nAll processes finished. Simulation terminated.\n");
+
+    return 0;
+}

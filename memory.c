@@ -1,88 +1,96 @@
 #include <stdio.h>
 #include "memory.h"
 
-unsigned char Instruction[INSTRUCTION_MEM_SIZE] = {0};
-int Data[DATA_MEM_SIZE] = {0};
+unsigned char Instruction[NP][INSTRUCTION_MEM_SIZE] = {{0}};
+int Data[NP][DATA_MEM_SIZE] = {{0}};
 
-void load_the_program() {
-    FILE *program = fopen("program.byte", "r");
+void load_the_program(int proc_id, const char *filename) {
+    if (proc_id < 0 || proc_id >= NP) return;
+
+    FILE *program = fopen(filename, "r");
 
     if (program == NULL) {
-        printf("program.byte not found or not opened >>>>>>\n");
+        printf("Core %d: %s not found or not opened >>>>>>\n", proc_id, filename);
         return;
     }
 
-    printf("Loading program from the program.byte file ....\n");
+    printf("Core %d: Loading program from %s ....\n", proc_id, filename);
 
     int idx = 0;
     unsigned int tmp;
 
     while (idx < INSTRUCTION_MEM_SIZE && fscanf(program, "%x", &tmp) == 1) {
         if (tmp > 0xFF) {
-            printf("Invalid byte value in program.byte: %X\n", tmp);
+            printf("Core %d: Invalid byte value in %s: %X\n", proc_id, filename, tmp);
             fclose(program);
             return;
         }
 
-        Instruction[idx++] = (unsigned char)tmp;
+        Instruction[proc_id][idx++] = (unsigned char)tmp;
     }
-    // for(int i=0; i < 20; i++) {
-    //     printf("This is the instruction %d %X\n", i, Instruction[i]);
-    // }
 
     fclose(program);
 }
 
-void load_the_data(const char *filename) {
+void load_the_data(int proc_id, const char *filename) {
+    if (proc_id < 0 || proc_id >= NP) return;
+
     FILE *data = fopen(filename, "r");
 
     if (data == NULL) {
-        printf("%s not found or not opened >>>>>>\n", filename);
+        printf("Core %d: %s not found or not opened >>>>>>\n", proc_id, filename);
         return;
     }
 
-    printf("Loading data from the %s file ....\n", filename);
+    printf("Core %d: Loading data from %s ....\n", proc_id, filename);
 
     int idx = 0;
     unsigned int tmp;
 
     while (idx < DATA_MEM_SIZE && fscanf(data, "%x", &tmp) == 1) {
         if (tmp > 0xFF) {
-            printf("Invalid byte value in %s: %X\n", filename, tmp);
+            printf("Core %d: Invalid byte value in %s: %X\n", proc_id, filename, tmp);
             fclose(data);
             return;
         }
 
-        Data[idx++] = (int)tmp;
+        Data[proc_id][idx++] = (int)tmp;
     }
 
     fclose(data);
 }
 
-void initialise(const char *filename) {
-    // Read the data from "program.byte" and populate instruction memory
-    load_the_program();
+void initialise(int proc_id, const char *program_file, const char *data_file) {
+    if (proc_id < 0 || proc_id >= NP) {
+        printf("Invalid process id\n");
+        return;
+    }
 
-    // Read the data from "data.byte" and populate data memory
-    load_the_data(filename);
+    load_the_program(proc_id, program_file);
+    load_the_data(proc_id, data_file);
 }
 
-void finalize(const char *filename) {
-    printf("Code Executed and finally writing the data FILE %s\n", filename);
+void finalize(int proc_id, const char *filename) {
+    if (proc_id < 0 || proc_id >= NP) {
+        printf("Invalid process id\n");
+        return;
+    }
+
+    printf("Core %d: Code Executed, writing data FILE %s\n", proc_id, filename);
 
     FILE *data = fopen(filename, "w");
 
     if (data == NULL) {
-        printf("Unable to open %s for writing >>>>>>\n", filename);
+        printf("Core %d: Unable to open %s for writing >>>>>>\n", proc_id, filename);
         return;
     }
 
     for (int i = 0; i < DATA_MEM_SIZE; i += 4) {
         fprintf(data, "%02X %02X %02X %02X\n",
-                (unsigned int)Data[i] & 0xFF,
-                (i + 1 < DATA_MEM_SIZE) ? (unsigned int)Data[i + 1] & 0xFF : 0,
-                (i + 2 < DATA_MEM_SIZE) ? (unsigned int)Data[i + 2] & 0xFF : 0,
-                (i + 3 < DATA_MEM_SIZE) ? (unsigned int)Data[i + 3] & 0xFF : 0);
+                (unsigned int)Data[proc_id][i] & 0xFF,
+                (i + 1 < DATA_MEM_SIZE) ? (unsigned int)Data[proc_id][i + 1] & 0xFF : 0,
+                (i + 2 < DATA_MEM_SIZE) ? (unsigned int)Data[proc_id][i + 2] & 0xFF : 0,
+                (i + 3 < DATA_MEM_SIZE) ? (unsigned int)Data[proc_id][i + 3] & 0xFF : 0);
     }
 
     fclose(data);
