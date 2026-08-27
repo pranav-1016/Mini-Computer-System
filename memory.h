@@ -18,6 +18,7 @@
 #define OP_READ 0x05
 #define OP_WRITE 0x06
 #define OP_MOV 0x07
+#define OP_PRINT 0x08
 
 // Operations with constant as second operand
 #define OP_ADD_CONST 0x09

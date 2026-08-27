@@ -57,6 +57,14 @@ void init_terminal(void) {
     fflush(stdout);
 }
 
+void cleanup_system(void) {
+    if (fd_log != NULL) {
+        fclose(fd_log);
+        fd_log = NULL;
+    }
+    reset_keyboard();
+}
+
 // Restores original terminal settings on exit
 void reset_keyboard(void) {
     tcsetattr(STDIN_FILENO, TCSANOW, &orig_termios);
@@ -74,7 +82,7 @@ void scheduler(void) {
         process.state = PROCESS_RUNNING;
         
         // Execute 10 instructions on this process's assigned processor[cite: 1]
-        process_instructions(process.proc_id, 10);
+        process_instructions(process.proc_id, BURST_TIME);
 
         // Check if process finished execution (opcode 0x00)[cite: 1]
         if (end_of_simulation[process.proc_id]) {

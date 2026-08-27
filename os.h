@@ -3,8 +3,8 @@
 
 #include "queue.h"
 // #include<filesystem.h>
-// #define BURST_TIME = 10
-// #define SLEEP_TIME = 20
+#define BURST_TIME 2
+#define SLEEP_TIME 200000
 #define PATH_LENGTH 256
 
 // data elements in the OS 
@@ -20,7 +20,8 @@ extern CircularQueue waitQueue;
 
 void init_terminal();
 void reset_keyboard();
-// loads the program from the program folder, and corresponding data.byte file from the data folder
+void cleanup_system(void);
+
 void loader(const char *program_file, const char *data_file);
 
 void scheduler(void);

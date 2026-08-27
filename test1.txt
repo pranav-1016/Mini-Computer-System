@@ -27,3 +27,4 @@ BAL .loop
 
 .exit
 [x1] = x5
+Print x1

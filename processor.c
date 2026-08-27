@@ -1,9 +1,13 @@
 #include <stdio.h>
+#include <unistd.h>
 #include "memory.h"
 #include "processor.h"
+#include "os.h"
 
 int Register[NP][NO_OF_REGISTERS] = {{0}};
 int Vector_Register[NP][NO_OF_VECTOR_REGISTERS][WIDTH_OF_VECTOR_REGISTERS] = {{{0}}};
+
+FILE *fd_log = NULL;
 
 int PC[NP] = {0};
 int opcode[NP] = {0};
@@ -54,6 +58,10 @@ void reset(int proc_id) {
     C[proc_id] = 0;
     V[proc_id] = 0;
     end_of_simulation[proc_id] = 0;
+
+    if (fd_log == NULL) {
+        fd_log = fopen("simulator.log", "a");
+    }
 }
 
 void fetch(int proc_id) {
@@ -70,7 +78,7 @@ void fetch(int proc_id) {
     src1[proc_id]   = Instruction[proc_id][PC[proc_id] + 2];
     src2[proc_id]   = Instruction[proc_id][PC[proc_id] + 3];
 
-    printf("Core %d running instruction: %X %X %X %X\n", proc_id, opcode[proc_id], dest[proc_id], src1[proc_id], src2[proc_id]);
+    // printf("Core %d running instruction: %X %X %X %X\n", proc_id, opcode[proc_id], dest[proc_id], src1[proc_id], src2[proc_id]);
     PC[proc_id] += 4;
 }
 
@@ -90,7 +98,22 @@ void execute(int proc_id) {
     case OP_HALT:
         end_of_simulation[proc_id] = 1;
         break;
-
+    
+    case OP_PRINT:
+        // Operand 2 (s2) holds target register index
+        if (s2 >= 0 && s2 < NO_OF_REGISTERS) {
+            if (fd_log != NULL) {
+                fprintf(fd_log, "Process id: %d x%d : 0x%X\n", proc_id, s2, Register[proc_id][s2]);
+                fflush(fd_log); // Force write so log reflects immediately in tail -f
+            }
+        } else {
+            if (fd_log != NULL) {
+                fprintf(fd_log, "Process id: %d Invalid Register Index %d\n", proc_id, s2);
+                fflush(fd_log);
+            }
+        }
+        break;
+    
     case OP_ADD:
     case OP_SUB:
     case OP_MUL:
@@ -169,7 +192,7 @@ void execute(int proc_id) {
         }
 
         Register[proc_id][d] = Data[proc_id][Register[proc_id][s1]];
-        printf("Core %d Read operation : Data[%d] = %d\n", proc_id, Register[proc_id][s1], Register[proc_id][d]);
+        // printf("Core %d Read operation : Data[%d] = %d\n", proc_id, Register[proc_id][s1], Register[proc_id][d]);
         break;
 
     case OP_READ_CONST:
@@ -186,7 +209,7 @@ void execute(int proc_id) {
         }
 
         Register[proc_id][d] = Data[proc_id][s1];
-        printf("Core %d Read constant operation : address=%d value=%d\n", proc_id, s1, Register[proc_id][d]);
+        // printf("Core %d Read constant operation : address=%d value=%d\n", proc_id, s1, Register[proc_id][d]);
         break;
 
     case OP_WRITE:
@@ -203,7 +226,7 @@ void execute(int proc_id) {
         }
 
         Data[proc_id][Register[proc_id][d]] = Register[proc_id][s1];
-        printf("Core %d Write operation : Data[%d] = %d\n", proc_id, Register[proc_id][d], Register[proc_id][s1]);
+        // printf("Core %d Write operation : Data[%d] = %d\n", proc_id, Register[proc_id][d], Register[proc_id][s1]);
         break;
 
     case OP_WRITE_CONST:
@@ -214,7 +237,7 @@ void execute(int proc_id) {
         }
 
         Data[proc_id][s1] = Register[proc_id][d];
-        printf("Core %d Write operation : Data[%d] = %d\n", proc_id, s1, Register[proc_id][d]);
+        // printf("Core %d Write operation : Data[%d] = %d\n", proc_id, s1, Register[proc_id][d]);
         break;
 
     case OP_MOV:
@@ -455,13 +478,16 @@ void execute(int proc_id) {
     }
 }
 
-void process_instructions(int proc_id, int count) {
+void process_instructions(int proc_id, int instruction_count) {
     if (proc_id < 0 || proc_id >= NP) return;
 
-    for (int i = 0; i < count; i++) {
+    for (int i = 0; i < instruction_count; i++) {
         if (end_of_simulation[proc_id]) break;
         fetch(proc_id);
         decode(proc_id);
         execute(proc_id);
     }
+
+    // printf("One Burst is completed >>> going to sleep with sleep time %d\n", SLEEP_TIME);
+    usleep(SLEEP_TIME);
 }

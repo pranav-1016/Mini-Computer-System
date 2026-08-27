@@ -231,6 +231,23 @@ char* compile(const char *filename) {
 
         printf("Compiling instruction %d: %s\n", instruction_index, buffer);
 
+        if (strncmp(buffer, "Print", 5) == 0) {
+            int reg_num = 0;
+            
+            // Parse "Print x<number>"
+            if (sscanf(buffer, "Print x%d", &reg_num) == 1) {
+                if (reg_num < 0 || reg_num >= 256) {
+                    printf("Compile Error: Invalid register x%d\n", reg_num);
+                    // Handle error / return
+                } else {
+                    // Format: Opcode (0x08) | Dest (0) | Src1 (0) | Src2 (reg_num)
+                    fprintf(output, "%02X 00 00 %02X\n", OP_PRINT, reg_num);
+                }
+            } else {
+                printf("Compile Error: Invalid Print syntax. Expected: Print x<reg>\n");
+            }
+            continue;
+        }
         /*
          * Legacy READ:
          * Read x1, 10

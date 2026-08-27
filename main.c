@@ -36,7 +36,8 @@ int main(int argc, char **argv) {
     }
 
     // 4. Restore terminal state before exiting
-    reset_keyboard();
+    cleanup_system();
+    // reset_keyboard();
     printf("\nAll processes finished. Simulation terminated.\n");
 
     return 0;
