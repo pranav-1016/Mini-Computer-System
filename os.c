@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <stdarg.h>
 #include <termios.h>
 #include <fcntl.h>
 #include <unistd.h>
@@ -13,6 +14,9 @@
 
 CircularQueue readyQueue;
 CircularQueue waitQueue;
+
+FILE *fd_log = NULL;
+FILE *fd_system_log = NULL;
 
 static char input_buffer[256];
 static int buf_idx = 0;
@@ -57,10 +61,34 @@ void init_terminal(void) {
     fflush(stdout);
 }
 
+void init_system_logs(void) {
+    if (fd_log == NULL) {
+        fd_log = fopen("simulator.log", "a");
+    }
+    if (fd_system_log == NULL) {
+        fd_system_log = fopen("system.log", "a");
+    }
+}
+
+// Global debug logging helper
+void log_system(const char *format, ...) {
+    if (fd_system_log != NULL) {
+        va_list args;
+        va_start(args, format);
+        vfprintf(fd_system_log, format, args);
+        va_end(args);
+        fflush(fd_system_log);
+    }
+}
+
 void cleanup_system(void) {
     if (fd_log != NULL) {
         fclose(fd_log);
         fd_log = NULL;
+    }
+    if (fd_system_log != NULL) {
+        fclose(fd_system_log);
+        fd_system_log = NULL;
     }
     reset_keyboard();
 }
@@ -69,6 +97,9 @@ void cleanup_system(void) {
 void reset_keyboard(void) {
     tcsetattr(STDIN_FILENO, TCSANOW, &orig_termios);
 }
+
+
+
 
 // Round-Robin OS Scheduler[cite: 1]
 void scheduler(void) {

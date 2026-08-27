@@ -7,7 +7,7 @@
 int Register[NP][NO_OF_REGISTERS] = {{0}};
 int Vector_Register[NP][NO_OF_VECTOR_REGISTERS][WIDTH_OF_VECTOR_REGISTERS] = {{{0}}};
 
-FILE *fd_log = NULL;
+
 
 int PC[NP] = {0};
 int opcode[NP] = {0};

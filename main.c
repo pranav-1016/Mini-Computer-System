@@ -23,6 +23,9 @@ int has_active_processes(void) {
 int main(int argc, char **argv) {
     // 1. Initialize terminal non-blocking IO and OS queues
     init_terminal();
+    init_system_logs();
+
+    log_system("[SYSTEM] Mini-Computer OS Started successfully.\n");
 
     // 2. Load initial process if passed via command line arguments
     if (argc >= 3) {

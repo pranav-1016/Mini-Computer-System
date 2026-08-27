@@ -13,8 +13,7 @@
 extern int Register[NP][NO_OF_REGISTERS];
 extern int Vector_Register[NP][NO_OF_VECTOR_REGISTERS][WIDTH_OF_VECTOR_REGISTERS];
 
-// File pointers for log output per process core
-extern FILE *fd_log;
+
 
 extern int PC[NP];
 extern int opcode[NP];

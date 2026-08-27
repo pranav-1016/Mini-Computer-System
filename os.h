@@ -17,6 +17,12 @@
 extern CircularQueue readyQueue;
 extern CircularQueue waitQueue;
 
+// File pointers for log output per process core
+extern FILE *fd_log; // analogous to our STDIN (for user's print)
+extern FILE *fd_system_log; // for programmer
+
+void init_system_logs(void);
+void log_system(const char *format, ...);
 
 void init_terminal();
 void reset_keyboard();
