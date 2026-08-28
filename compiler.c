@@ -241,7 +241,8 @@ char* compile(const char *filename) {
                     // Handle error / return
                 } else {
                     // Format: Opcode (0x08) | Dest (0) | Src1 (0) | Src2 (reg_num)
-                    fprintf(output, "%02X 00 00 %02X\n", OP_PRINT, reg_num);
+                    fprintf(output, "%02X 0 0 %02X\n", OP_PRINT, reg_num);
+                    instruction_index++;
                 }
             } else {
                 printf("Compile Error: Invalid Print syntax. Expected: Print x<reg>\n");
