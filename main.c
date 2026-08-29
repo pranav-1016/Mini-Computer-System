@@ -29,7 +29,7 @@ int main(int argc, char **argv) {
 
     // 2. Load initial process if passed via command line arguments
     if (argc >= 3) {
-        printf("Loading initial task: %s %s\n", argv[1], argv[2]);
+        log_system("Loading initial task: %s %s\n", argv[1], argv[2]);
         loader(argv[1], argv[2]);
     }
 
