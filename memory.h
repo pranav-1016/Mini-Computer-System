@@ -4,6 +4,9 @@
 /* Memory constants */
 #define INSTRUCTION_MEM_SIZE 256
 #define DATA_MEM_SIZE 4096
+#define MEMSIZE 8192
+#define PAGESIZE 512
+
 #define NP 4
 
 /* Opcode constants */
@@ -64,8 +67,9 @@
 #define OP_BLE 0x1D
 #define OP_BAL 0x1E
 
-extern unsigned char Instruction[NP][INSTRUCTION_MEM_SIZE];
-extern int Data[NP][DATA_MEM_SIZE];
+// extern unsigned char Instruction[NP][INSTRUCTION_MEM_SIZE];
+// extern int Data[NP][DATA_MEM_SIZE];
+extern char memory[MEMSIZE];
 
 void load_the_program(int proc_id, const char *filename);
 void load_the_data(int proc_id, const char *filename);
