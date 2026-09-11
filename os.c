@@ -32,6 +32,17 @@ char pageTable[MAX_PROC][NUM_LOGICAL_PAGES];
 // Physical frame availability tracker: 0 = Free, 1 = Allocated
 char freePages[NUM_PHYSICAL_PAGES] = {0};
 
+void printPageAllocation(int proc_id) {
+    printf("--------------------------------------\n");
+    printf("Page Table for process id %d :\n", proc_id);
+    for (int i=0; i < NUM_LOGICAL_PAGES; i++) {
+        if (pageTable[proc_id][i] != -1) {
+            printf("Page %d : Frame %d\n", i, pageTable[proc_id][i]);
+        }
+    }
+    printf("--------------------------------------\n");
+}
+
 int allocate_processor(void) {
     for (int i = 0; i < NP; i++) {
         if (!processor_busy[i]) {
@@ -125,7 +136,7 @@ int getFreePage(void) {
     for (int i = 1; i < NUM_PHYSICAL_PAGES; i++) {
         if (freePages[i] == 0) {
             freePages[i] = 1; // Mark frame as allocated
-            printf("Free page no. %d returned \n", i);
+            // printf("Free page no. %d returned \n", i);
             return i;
         }
     }
@@ -212,6 +223,7 @@ static int load_bytes_to_memory(const char *program_file, const char *data_file,
 
         data_byte_count += 4;
     }
+    printPageAllocation(proc_id);
 
     fclose(fdata);
     return 1;
