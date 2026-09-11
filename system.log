@@ -1,19 +1,47 @@
 [SYSTEM] Mini-Computer OS Started successfully.
-Compiling test4.txt...
+Compiling sum_of_vector.txt...
 Pass 1: scanning labels and instruction positions...
-Labels found (0):
-  <none>
+  Label found: .addbatchAB -> instruction 7
+  Label found: .exit -> instruction 13
+Labels found (2):
+  .addbatchAB -> instruction 7
+  .exit -> instruction 13
 Pass 2: generating bytecode...
-Compiling instruction 0: x0 = 4090
+Compiling instruction 0: x1 = 0
 
-Invalid operand in MOV_CONST: x0 = 4090
+  -> 0F 01 00 00
+Compiling instruction 1: x2 = [x1]       
+  -> 05 02 01 00
+Compiling instruction 2: x3 = x1 + 4     
+  -> 09 03 01 04
+Compiling instruction 3: x4 = x2 * 4
 
-Compiling instruction 0: [x0] = 10
+  -> 0B 04 02 04
+Compiling instruction 4: x4 = x4 + 4     
+  -> 09 04 04 04
+Compiling instruction 5: x255 = x2 * 8
 
-Unable to compile instruction: [x0] = 10
+  -> 0B FF 02 08
+Compiling instruction 6: x255 = x255 + 4 
+  -> 09 FF FF 04
+Compiling instruction 7: v1 = [x3]
 
-Compiling instruction 0: Print x0
+  -> 24 01 03 00
+Compiling instruction 8: v2 = [x4]
+
+  -> 24 02 04 00
+Compiling instruction 9: v3 = v1 + v2
+
+  -> 21 03 01 02
+Compiling instruction 10: [x255] = v3
+
+  -> 25 FF 03 00
+Compiling instruction 11: x2 = x2 - 8
+
+  -> 0A 02 02 08
+Compiling instruction 12: BNE .addbatchAB
+
+  -> 11 00 00 FB
   -> 00 00 00 00 (HALT)
 Compilation complete. Wrote program.byte
-Compilation completed successfully <<<<<< test4
-Core 0: Code Executed, writing data FILE data1.byte
+Compilation completed successfully <<<<<< sum_of_vector

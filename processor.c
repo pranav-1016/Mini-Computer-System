@@ -65,7 +65,7 @@ void reset(int proc_id) {
 void fetch(int proc_id) {
     if (proc_id < 0 || proc_id >= NP) return;
 
-    if (PC[proc_id] < 0 || PC[proc_id] + 3 >= 1024) { // Logical max instruction space
+    if (PC[proc_id] < 0 || PC[proc_id] + WORD_SIZE - 1 >= 1024) { // Logical max instruction space
         log_system("Core %d Fetch: PC out of bounds (PC=%d)\n", proc_id, PC[proc_id]);
         end_of_simulation[proc_id] = 1;
         return;
@@ -195,8 +195,10 @@ void execute(int proc_id) {
             break;
         }
 
-        int phys_addr = getPhysicalAddress(proc_id, 0, logical_addr);
-        Register[proc_id][d] = (unsigned char)memory[phys_addr];
+        if (!read_word(proc_id, logical_addr, &Register[proc_id][d])) {
+            log_system("Core %d: Unable to read 32-bit value at address %d\n", proc_id, logical_addr);
+            end_of_simulation[proc_id] = 1;
+        }
         break;
     }
 
@@ -207,8 +209,10 @@ void execute(int proc_id) {
             break;
         }
 
-        int phys_addr = getPhysicalAddress(proc_id, 0, s1);
-        Register[proc_id][d] = (unsigned char)memory[phys_addr];
+        if (!read_word(proc_id, s1, &Register[proc_id][d])) {
+            log_system("Core %d: Unable to read 32-bit value at address %d\n", proc_id, s1);
+            end_of_simulation[proc_id] = 1;
+        }
         break;
     }
 
@@ -226,20 +230,24 @@ void execute(int proc_id) {
             break;
         }
 
-        int phys_addr = getPhysicalAddress(proc_id, 0, logical_addr);
-        memory[phys_addr] = (char)(Register[proc_id][s1] & 0xFF);
+        if (!write_word(proc_id, logical_addr, Register[proc_id][s1])) {
+            log_system("Core %d: Unable to write 32-bit value at address %d\n", proc_id, logical_addr);
+            end_of_simulation[proc_id] = 1;
+        }
         break;
     }
 
     case OP_WRITE_CONST: { // [s1] = d (s1 is immediate address, d holds register value)
-        if (d < 0 || d >= NO_OF_REGISTERS || s1 < 0 || s1 >= DATA_MEM_SIZE) {
+        if (d < 0 || d >= NO_OF_REGISTERS || s1 < CONST_VALUE_MIN || s1 > CONST_VALUE_MAX) {
             log_system("Core %d: Invalid indices in WRITE_CONST (reg=%d, addr=%d)\n", proc_id, d, s1);
             end_of_simulation[proc_id] = 1;
             break;
         }
 
-        int phys_addr = getPhysicalAddress(proc_id, 0, s1);
-        memory[phys_addr] = (char)(Register[proc_id][d] & 0xFF);
+        if (!write_word(proc_id, s1, Register[proc_id][d])) {
+            log_system("Core %d: Unable to write 32-bit value at address %d\n", proc_id, s1);
+            end_of_simulation[proc_id] = 1;
+        }
         break;
     }
 
@@ -329,18 +337,21 @@ void execute(int proc_id) {
         }
 
         int base_logical_addr = Register[proc_id][s1];
-        if (base_logical_addr < 0 || base_logical_addr + (WIDTH_OF_VECTOR_REGISTERS * 4) > DATA_MEM_SIZE) {
+        if (base_logical_addr < 0 || base_logical_addr > DATA_MEM_SIZE - (WIDTH_OF_VECTOR_REGISTERS * WORD_SIZE)) {
             log_system("Core %d: Invalid memory address in vector READ (address=%d)\n", proc_id, base_logical_addr);
             end_of_simulation[proc_id] = 1;
             break;
         }
 
         for (int i = 0; i < WIDTH_OF_VECTOR_REGISTERS; i++) {
-            int current_logical = base_logical_addr + (i * 4);
-            int phys_addr = getPhysicalAddress(proc_id, 0, current_logical);
-            Vector_Register[proc_id][d][i] = (unsigned char)memory[phys_addr];
+            int current_logical = base_logical_addr + (i * WORD_SIZE);
+            if (!read_word(proc_id, current_logical, &Vector_Register[proc_id][d][i])) {
+                log_system("Core %d: Unable to read vector value at address %d\n", proc_id, current_logical);
+                end_of_simulation[proc_id] = 1;
+                break;
+            }
         }
-        Register[proc_id][s1] += (WIDTH_OF_VECTOR_REGISTERS * 4);
+        Register[proc_id][s1] += (WIDTH_OF_VECTOR_REGISTERS * WORD_SIZE);
         break;
     }
 
@@ -351,16 +362,19 @@ void execute(int proc_id) {
             break;
         }
 
-        if (s1 < 0 || s1 + (WIDTH_OF_VECTOR_REGISTERS * 4) > DATA_MEM_SIZE) {
+        if (s1 < 0 || s1 > DATA_MEM_SIZE - (WIDTH_OF_VECTOR_REGISTERS * WORD_SIZE)) {
             log_system("Core %d: Invalid memory address in vector READ_CONST (address=%d)\n", proc_id, s1);
             end_of_simulation[proc_id] = 1;
             break;
         }
 
         for (int i = 0; i < WIDTH_OF_VECTOR_REGISTERS; i++) {
-            int current_logical = s1 + (i * 4);
-            int phys_addr = getPhysicalAddress(proc_id, 0, current_logical);
-            Vector_Register[proc_id][d][i] = (unsigned char)memory[phys_addr];
+            int current_logical = s1 + (i * WORD_SIZE);
+            if (!read_word(proc_id, current_logical, &Vector_Register[proc_id][d][i])) {
+                log_system("Core %d: Unable to read vector value at address %d\n", proc_id, current_logical);
+                end_of_simulation[proc_id] = 1;
+                break;
+            }
         }
         break;
     }
@@ -373,38 +387,44 @@ void execute(int proc_id) {
         }
 
         int base_logical_addr = Register[proc_id][d];
-        if (base_logical_addr < 0 || base_logical_addr + (WIDTH_OF_VECTOR_REGISTERS * 4) > DATA_MEM_SIZE) {
+        if (base_logical_addr < 0 || base_logical_addr > DATA_MEM_SIZE - (WIDTH_OF_VECTOR_REGISTERS * WORD_SIZE)) {
             log_system("Core %d: Invalid memory address in vector WRITE (address=%d)\n", proc_id, base_logical_addr);
             end_of_simulation[proc_id] = 1;
             break;
         }
 
         for (int i = 0; i < WIDTH_OF_VECTOR_REGISTERS; i++) {
-            int current_logical = base_logical_addr + (i * 4);
-            int phys_addr = getPhysicalAddress(proc_id, 0, current_logical);
-            memory[phys_addr] = (char)(Vector_Register[proc_id][s1][i] & 0xFF);
+            int current_logical = base_logical_addr + (i * WORD_SIZE);
+            if (!write_word(proc_id, current_logical, Vector_Register[proc_id][s1][i])) {
+                log_system("Core %d: Unable to write vector value at address %d\n", proc_id, current_logical);
+                end_of_simulation[proc_id] = 1;
+                break;
+            }
         }
-        Register[proc_id][d] += (WIDTH_OF_VECTOR_REGISTERS * 4);
+        Register[proc_id][d] += (WIDTH_OF_VECTOR_REGISTERS * WORD_SIZE);
         break;
     }
 
     case OP_VEC_WRITE_CONST: { // [s1] = d (store vector reg d starting at immediate address s1)
-        if (d < 0 || d >= NO_OF_VECTOR_REGISTERS || s1 < 0 || s1 >= DATA_MEM_SIZE) {
+        if (d < 0 || d >= NO_OF_VECTOR_REGISTERS || s1 < CONST_VALUE_MIN || s1 > CONST_VALUE_MAX) {
             log_system("Core %d: Invalid registers in vector WRITE_CONST (addr=%d, data_reg=%d)\n", proc_id, s1, d);
             end_of_simulation[proc_id] = 1;
             break;
         }
 
-        if (s1 < 0 || s1 + (WIDTH_OF_VECTOR_REGISTERS * 4) > DATA_MEM_SIZE) {
+        if (s1 < 0 || s1 > DATA_MEM_SIZE - (WIDTH_OF_VECTOR_REGISTERS * WORD_SIZE)) {
             log_system("Core %d: Invalid memory address in vector WRITE_CONST (address=%d)\n", proc_id, s1);
             end_of_simulation[proc_id] = 1;
             break;
         }
 
         for (int i = 0; i < WIDTH_OF_VECTOR_REGISTERS; i++) {
-            int current_logical = s1 + (i * 4);
-            int phys_addr = getPhysicalAddress(proc_id, 0, current_logical);
-            memory[phys_addr] = (char)(Vector_Register[proc_id][d][i] & 0xFF);
+            int current_logical = s1 + (i * WORD_SIZE);
+            if (!write_word(proc_id, current_logical, Vector_Register[proc_id][d][i])) {
+                log_system("Core %d: Unable to write vector value at address %d\n", proc_id, current_logical);
+                end_of_simulation[proc_id] = 1;
+                break;
+            }
         }
         break;
     }
