@@ -14,7 +14,7 @@ int has_active_processes(void) {
     if (!isEmpty(&readyQueue) || !isEmpty(&waitQueue)) {
         return 1;
     }
-    for (int i = 0; i < NP; i++) { // NP = 4
+    for (int i = 0; i < NP; i++) {
         if (processor_busy[i]) return 1;
     }
     return 0;
@@ -40,7 +40,6 @@ int main(int argc, char **argv) {
 
     // 4. Restore terminal state before exiting
     cleanup_system();
-    // reset_keyboard();
     printf("\nAll processes finished. Simulation terminated.\n");
 
     return 0;

@@ -4,6 +4,7 @@
 #include <ctype.h>
 #include "compiler.h"
 #include "memory.h"
+#include "processor.h"
 #include "os.h"
 
 #define MAX_LINES 100
@@ -67,14 +68,18 @@ int get_branch_opcode(const char *branch) {
 }
 
 int is_valid_register(int reg) {
-    return reg >= 0 && reg <= 255;
+    return reg >= 0 && reg < NO_OF_REGISTERS;
 }
 int is_valid_vector_register(int reg) {
-    return reg >= 0 && reg <= 31;
+    return reg >= 0 && reg < NO_OF_VECTOR_REGISTERS;
 }
 
 int is_valid_constant(int value) {
-    return value >= 0 && value <= 255;
+    return value >= CONST_VALUE_MIN && value <= CONST_VALUE_MAX;
+}
+
+static int is_valid_encoded_operand(int value) {
+    return value >= ENCODED_OPERAND_MIN && value <= ENCODED_OPERAND_MAX;
 }
 
 int is_valid_label(const char *label) {
@@ -255,7 +260,7 @@ char* compile(const char *filename) {
                 continue;
             }
 
-            if (!is_valid_register(reg) || !is_valid_constant(address)) {
+            if (!is_valid_register(reg) || !is_valid_encoded_operand(address)) {
                 log_system("Invalid Read operands: %s\n", buffer);
                 continue;
             }
@@ -278,7 +283,7 @@ char* compile(const char *filename) {
                 continue;
             }
 
-            if (!is_valid_register(reg) || !is_valid_constant(address)) {
+            if (!is_valid_register(reg) || !is_valid_encoded_operand(address)) {
                 log_system("Invalid Write operands: %s\n", buffer);
                 continue;
             }
@@ -310,7 +315,7 @@ char* compile(const char *filename) {
          * x1 = [100]
          */
         if (sscanf(buffer, "x%d = [%d]", &dest, &value) == 2) {
-            if (!is_valid_register(dest) || !is_valid_constant(value)) {
+            if (!is_valid_register(dest) || !is_valid_encoded_operand(value)) {
                 log_system("Invalid operand in memory read: %s\n", buffer);
                 continue;
             }
@@ -342,7 +347,7 @@ char* compile(const char *filename) {
          * [100] = x2
          */
         if (sscanf(buffer, "[%d] = x%d", &value, &src1) == 2) {
-            if (!is_valid_constant(value) || !is_valid_register(src1)) {
+            if (!is_valid_encoded_operand(value) || !is_valid_register(src1)) {
                 log_system("Invalid operand in memory write: %s\n", buffer);
                 continue;
             }
@@ -370,7 +375,7 @@ char* compile(const char *filename) {
         }
         // Read vector with constant
         if (sscanf(buffer, "v%d = [%d]", &dest, &value) == 2) {
-            if (!is_valid_vector_register(dest) || !is_valid_constant(value)) {
+            if (!is_valid_vector_register(dest) || !is_valid_encoded_operand(value)) {
                 log_system("Invalid operand in memory read: %s\n", buffer);
                 continue;
             }
@@ -394,7 +399,7 @@ char* compile(const char *filename) {
         }
         // Write vector with constant
         if (sscanf(buffer, "[%d] = v%d", &value, &src1) == 2) {
-            if (!is_valid_constant(value) || !is_valid_vector_register(src1)) {
+            if (!is_valid_encoded_operand(value) || !is_valid_vector_register(src1)) {
                 log_system("Invalid operand in memory write: %s\n", buffer);
                 continue;
             }
@@ -466,7 +471,7 @@ char* compile(const char *filename) {
                 continue;
             }
 
-            if (!is_valid_register(dest) || !is_valid_register(src1) || !is_valid_constant(value)) {
+            if (!is_valid_register(dest) || !is_valid_register(src1) || !is_valid_encoded_operand(value)) {
                 log_system("Invalid operand in constant arithmetic: %s\n", buffer);
                 continue;
             }
@@ -530,7 +535,7 @@ char* compile(const char *filename) {
                 continue;
             }
 
-            if (!is_valid_vector_register(dest) || !is_valid_vector_register(src1) || !is_valid_vector_register(value)) {
+            if (!is_valid_vector_register(dest) || !is_valid_vector_register(src1) || !is_valid_constant(value)) {
                 log_system("Invalid operand in constant arithmetic: %s\n", buffer);
                 continue;
             }
@@ -594,7 +599,7 @@ char* compile(const char *filename) {
          * x1 = 100
          */
         if (sscanf(buffer, "x%d = %d", &dest, &value) == 2) {
-            if (!is_valid_register(dest) || !is_valid_constant(value)) {
+            if (!is_valid_register(dest) || !is_valid_encoded_operand(value)) {
                 log_system("Invalid operand in MOV_CONST: %s\n", buffer);
                 continue;
             }

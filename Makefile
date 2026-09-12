@@ -17,11 +17,11 @@ os.o: os.c os.h queue.h compiler.h processor.h memory.h
 queue.o: queue.c queue.h
 	$(CC) $(CFLAGS) -c queue.c
 
-compiler.o: compiler.c compiler.h
+compiler.o: compiler.c compiler.h memory.h processor.h os.h
 	$(CC) $(CFLAGS) -c compiler.c
-memory.o: memory.c memory.h
+memory.o: memory.c memory.h os.h
 	$(CC) $(CFLAGS) -c memory.c
-processor.o: processor.c processor.h
+processor.o: processor.c processor.h memory.h os.h
 	$(CC) $(CFLAGS) -c processor.c
 
 .PHONY: clean
