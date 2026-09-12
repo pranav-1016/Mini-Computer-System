@@ -61,3 +61,22 @@ Example:
 - The simulator expects the first argument to be the program/input file and the second argument to be the data file.
 - If the wrong number of arguments is provided, the program will print usage instructions and exit.
 - The executable name is `simulator` on Linux/WSL and `simulator.exe` on Windows.
+
+## Extension features
+
+- Processes use saved CPU contexts and execute in time slices.
+- Ready-queue scheduling uses priority with aging; equal-priority processes remain round-robin.
+- Page-table entries are stored in reserved physical memory and include read, write, and execute permissions.
+- A small TLB and direct-mapped data cache record hit/miss statistics and add simulated access delay.
+- The shared buffer is mapped at logical data address `SHARED_MEMORY_ADDRESS` in `memory.h`.
+- MMIO addresses are `IO_CONSOLE_OUT`, `IO_CONSOLE_IN`, and `IO_PROCESS_ID`.
+
+While the simulator is running, useful shell commands include:
+
+```text
+stats
+memmap <process-id>
+cache <process-id>
+tlb <process-id>
+priority <process-id> <priority>
+```

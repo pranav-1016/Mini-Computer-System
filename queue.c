@@ -48,3 +48,27 @@ int peek(const CircularQueue *queue, PCB *process) {
     *process = queue->items[queue->front];
     return 1;
 }
+
+int dequeue_highest_priority(CircularQueue *queue, PCB *process) {
+    if (isEmpty(queue) || process == 0) return 0;
+
+    PCB selected;
+    PCB remaining[QUEUE_CAPACITY];
+    int remaining_count = 0;
+    dequeue(queue, &selected);
+
+    while (!isEmpty(queue)) {
+        PCB candidate;
+        dequeue(queue, &candidate);
+        if (candidate.priority > selected.priority) {
+            remaining[remaining_count++] = selected;
+            selected = candidate;
+        } else {
+            remaining[remaining_count++] = candidate;
+        }
+    }
+
+    for (int i = 0; i < remaining_count; i++) enqueue(queue, remaining[i]);
+    *process = selected;
+    return 1;
+}

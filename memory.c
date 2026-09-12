@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <unistd.h>
 #include "memory.h"
 #include "os.h"
 
@@ -7,6 +8,70 @@
 // int Data[NP][DATA_MEM_SIZE] = {{0}};
 
 char memory[MEMSIZE] = {0};
+
+static int io_input_value = 0;
+
+#define CACHE_LINES 16
+typedef struct {
+    int valid;
+    int physical_address;
+    unsigned char value;
+} CacheLine;
+
+static CacheLine data_cache[NP][CACHE_LINES];
+static unsigned long cache_hits[NP] = {0};
+static unsigned long cache_misses[NP] = {0};
+
+static int cache_read_byte(int proc_id, int physical_address) {
+    int line_index = (physical_address / WORD_SIZE) % CACHE_LINES;
+    CacheLine *line = &data_cache[proc_id][line_index];
+    if (line->valid && line->physical_address == physical_address) {
+        cache_hits[proc_id]++;
+        usleep(10);
+        return line->value;
+    }
+
+    cache_misses[proc_id]++;
+    usleep(100);
+    line->valid = 1;
+    line->physical_address = physical_address;
+    line->value = (unsigned char)memory[physical_address];
+    return line->value;
+}
+
+static void cache_write_byte(int proc_id, int physical_address, unsigned char value) {
+    int line_index = (physical_address / WORD_SIZE) % CACHE_LINES;
+    CacheLine *line = &data_cache[proc_id][line_index];
+    line->valid = 1;
+    line->physical_address = physical_address;
+    line->value = value;
+    memory[physical_address] = (char)value;
+}
+
+static int read_io(int proc_id, int logical_address, int *value) {
+    if (logical_address == IO_PROCESS_ID) {
+        *value = proc_id;
+        return 1;
+    }
+    if (logical_address == IO_CONSOLE_IN) {
+        *value = io_input_value;
+        return 1;
+    }
+    return 0;
+}
+
+static int write_io(int proc_id, int logical_address, int value) {
+    if (logical_address == IO_CONSOLE_OUT) {
+        printf("[MMIO PID %d] %d\n", proc_id, value);
+        fflush(stdout);
+        return 1;
+    }
+    if (logical_address == IO_CONSOLE_IN) {
+        io_input_value = value;
+        return 1;
+    }
+    return 0;
+}
 
 int read_word(int proc_id, int logical_address, int *value) {
     if (value == NULL) {
@@ -20,6 +85,9 @@ int read_word(int proc_id, int logical_address, int *value) {
     }
 
     if (logical_address < 0 || logical_address > DATA_MEM_SIZE - WORD_SIZE) {
+        if (logical_address == IO_PROCESS_ID || logical_address == IO_CONSOLE_IN) {
+            return read_io(proc_id, logical_address, value);
+        }
         log_system("Core %d: 32-bit read out of bounds (address=%d, word size=%d, data size=%d)\n",
                    proc_id, logical_address, WORD_SIZE, DATA_MEM_SIZE);
         return 0;
@@ -27,13 +95,13 @@ int read_word(int proc_id, int logical_address, int *value) {
 
     unsigned int result = 0;
     for (int byte_index = 0; byte_index < WORD_SIZE; byte_index++) {
-        int physical_address = getPhysicalAddress(proc_id, 0, logical_address + byte_index);
+        int physical_address = getPhysicalAddress(proc_id, ACCESS_READ, logical_address + byte_index);
         if (physical_address < 0 || physical_address >= MEMSIZE) {
             log_system("Core %d: 32-bit read translation failed (logical address=%d, physical address=%d)\n",
                        proc_id, logical_address + byte_index, physical_address);
             return 0;
         }
-        result |= ((unsigned int)(unsigned char)memory[physical_address]) << (byte_index * 8);
+        result |= ((unsigned int)cache_read_byte(proc_id, physical_address)) << (byte_index * 8);
     }
 
     *value = (int)result;
@@ -47,6 +115,9 @@ int write_word(int proc_id, int logical_address, int value) {
     }
 
     if (logical_address < 0 || logical_address > DATA_MEM_SIZE - WORD_SIZE) {
+        if (logical_address == IO_CONSOLE_OUT || logical_address == IO_CONSOLE_IN) {
+            return write_io(proc_id, logical_address, value);
+        }
         log_system("Core %d: 32-bit write out of bounds (address=%d, word size=%d, data size=%d)\n",
                    proc_id, logical_address, WORD_SIZE, DATA_MEM_SIZE);
         return 0;
@@ -54,7 +125,7 @@ int write_word(int proc_id, int logical_address, int value) {
 
     int physical_addresses[WORD_SIZE];
     for (int byte_index = 0; byte_index < WORD_SIZE; byte_index++) {
-        physical_addresses[byte_index] = getPhysicalAddress(proc_id, 0, logical_address + byte_index);
+        physical_addresses[byte_index] = getPhysicalAddress(proc_id, ACCESS_WRITE, logical_address + byte_index);
         if (physical_addresses[byte_index] < 0 || physical_addresses[byte_index] >= MEMSIZE) {
             log_system("Core %d: 32-bit write translation failed (logical address=%d, physical address=%d)\n",
                        proc_id, logical_address + byte_index, physical_addresses[byte_index]);
@@ -63,10 +134,17 @@ int write_word(int proc_id, int logical_address, int value) {
     }
 
     for (int byte_index = 0; byte_index < WORD_SIZE; byte_index++) {
-        memory[physical_addresses[byte_index]] = (char)(((unsigned int)value >> (byte_index * 8)) & 0xFF);
+        cache_write_byte(proc_id, physical_addresses[byte_index],
+                 (unsigned char)(((unsigned int)value >> (byte_index * 8)) & 0xFF));
     }
 
     return 1;
+}
+
+void print_memory_statistics(int proc_id) {
+    if (proc_id < 0 || proc_id >= NP) return;
+    printf("PID %d cache hits=%lu misses=%lu\n", proc_id,
+           cache_hits[proc_id], cache_misses[proc_id]);
 }
 
 

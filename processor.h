@@ -18,7 +18,12 @@
 extern int Register[NP][NO_OF_REGISTERS];
 extern int Vector_Register[NP][NO_OF_VECTOR_REGISTERS][WIDTH_OF_VECTOR_REGISTERS];
 
-
+typedef struct {
+    int registers[NO_OF_REGISTERS];
+    int vector_registers[NO_OF_VECTOR_REGISTERS][WIDTH_OF_VECTOR_REGISTERS];
+    int pc;
+    int z, n, c, v;
+} CPUContext;
 
 extern int PC[NP];
 extern int opcode[NP];
@@ -32,8 +37,11 @@ extern int Z[NP];
 extern int N[NP];
 extern int C[NP];
 extern int V[NP];
+extern unsigned long process_instruction_count[NP];
 
 void reset(int proc_id);
+void save_context(int proc_id, CPUContext *context);
+void load_context(int proc_id, const CPUContext *context);
 void fetch(int proc_id);
 void decode(int proc_id);
 void execute(int proc_id);

@@ -133,13 +133,13 @@ char* compile(const char *filename) {
 
     if (input == NULL) {
         printf("File not found or not opened >>>>>\n");
-        return;
+        return NULL;
     }
 
     if (output == NULL) {
         printf("Unable to create program.byte >>>>>\n");
         fclose(input);
-        return;
+        return NULL;
     }
 
     log_system("Compiling %s...\n", filename);
@@ -176,14 +176,14 @@ char* compile(const char *filename) {
                 log_system("Invalid label: %s\n", label);
                 fclose(input);
                 fclose(output);
-                return;
+                return NULL;
             }
 
             if (find_label(label) != -1) {
                 log_system("Duplicate label: %s\n", label);
                 fclose(input);
                 fclose(output);
-                return;
+                return NULL;
             }
 
             if (label_count >= MAX_LABELS) {

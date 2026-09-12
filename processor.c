@@ -19,6 +19,7 @@ int Z[NP] = {0};
 int N[NP] = {0};
 int C[NP] = {0};
 int V[NP] = {0};
+unsigned long process_instruction_count[NP] = {0};
 
 static void update_flags(int proc_id, int a, int b, int result, int is_sub) {
     Z[proc_id] = (result == 0) ? 1 : 0;
@@ -62,6 +63,42 @@ void reset(int proc_id) {
     }
 }
 
+void save_context(int proc_id, CPUContext *context) {
+    if (context == NULL || proc_id < 0 || proc_id >= NP) return;
+
+    for (int i = 0; i < NO_OF_REGISTERS; i++) {
+        context->registers[i] = Register[proc_id][i];
+    }
+    for (int i = 0; i < NO_OF_VECTOR_REGISTERS; i++) {
+        for (int j = 0; j < WIDTH_OF_VECTOR_REGISTERS; j++) {
+            context->vector_registers[i][j] = Vector_Register[proc_id][i][j];
+        }
+    }
+    context->pc = PC[proc_id];
+    context->z = Z[proc_id];
+    context->n = N[proc_id];
+    context->c = C[proc_id];
+    context->v = V[proc_id];
+}
+
+void load_context(int proc_id, const CPUContext *context) {
+    if (context == NULL || proc_id < 0 || proc_id >= NP) return;
+
+    for (int i = 0; i < NO_OF_REGISTERS; i++) {
+        Register[proc_id][i] = context->registers[i];
+    }
+    for (int i = 0; i < NO_OF_VECTOR_REGISTERS; i++) {
+        for (int j = 0; j < WIDTH_OF_VECTOR_REGISTERS; j++) {
+            Vector_Register[proc_id][i][j] = context->vector_registers[i][j];
+        }
+    }
+    PC[proc_id] = context->pc;
+    Z[proc_id] = context->z;
+    N[proc_id] = context->n;
+    C[proc_id] = context->c;
+    V[proc_id] = context->v;
+}
+
 void fetch(int proc_id) {
     if (proc_id < 0 || proc_id >= NP) return;
 
@@ -72,10 +109,10 @@ void fetch(int proc_id) {
     }
 
     // 1. Get physical address for each instruction byte using isFetch = 1
-    int p_addr0 = getPhysicalAddress(proc_id, 1, PC[proc_id]);
-    int p_addr1 = getPhysicalAddress(proc_id, 1, PC[proc_id] + 1);
-    int p_addr2 = getPhysicalAddress(proc_id, 1, PC[proc_id] + 2);
-    int p_addr3 = getPhysicalAddress(proc_id, 1, PC[proc_id] + 3);
+    int p_addr0 = getPhysicalAddress(proc_id, ACCESS_EXECUTE, PC[proc_id]);
+    int p_addr1 = getPhysicalAddress(proc_id, ACCESS_EXECUTE, PC[proc_id] + 1);
+    int p_addr2 = getPhysicalAddress(proc_id, ACCESS_EXECUTE, PC[proc_id] + 2);
+    int p_addr3 = getPhysicalAddress(proc_id, ACCESS_EXECUTE, PC[proc_id] + 3);
 
     // 2. Fetch from physical memory
     opcode[proc_id] = (unsigned char)memory[p_addr0];
@@ -519,6 +556,7 @@ void process_instructions(int proc_id, int count) {
         fetch(proc_id);
         decode(proc_id);
         execute(proc_id);
+        process_instruction_count[proc_id]++;
     }
 
     usleep(SLEEP_TIME);

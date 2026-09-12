@@ -7,6 +7,10 @@
 #define MEMSIZE 8192
 #define PAGESIZE 512
 #define WORD_SIZE 4
+#define IO_START_ADDRESS DATA_MEM_SIZE
+#define IO_CONSOLE_OUT (IO_START_ADDRESS + 0)
+#define IO_CONSOLE_IN  (IO_START_ADDRESS + WORD_SIZE)
+#define IO_PROCESS_ID  (IO_START_ADDRESS + (2 * WORD_SIZE))
 
 #define NP 4
 
@@ -72,8 +76,15 @@
 // extern int Data[NP][DATA_MEM_SIZE];
 extern char memory[MEMSIZE];
 
+enum MemoryAccess {
+	ACCESS_READ = 0,
+	ACCESS_WRITE = 1,
+	ACCESS_EXECUTE = 2
+};
+
 int read_word(int proc_id, int logical_address, int *value);
 int write_word(int proc_id, int logical_address, int value);
+void print_memory_statistics(int proc_id);
 
 void load_the_program(int proc_id, const char *filename);
 void load_the_data(int proc_id, const char *filename);

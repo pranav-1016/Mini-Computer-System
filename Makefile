@@ -14,7 +14,7 @@ main.o: main.c compiler.h processor.h memory.h
 os.o: os.c os.h queue.h compiler.h processor.h memory.h
 	$(CC) $(CFLAGS) -c os.c
 
-queue.o: queue.c queue.h
+queue.o: queue.c queue.h processor.h memory.h
 	$(CC) $(CFLAGS) -c queue.c
 
 compiler.o: compiler.c compiler.h memory.h processor.h os.h

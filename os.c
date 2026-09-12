@@ -26,8 +26,19 @@ int processor_busy[NP] = {0};
 int next_pid = 1;             
 int shell_active = 1;         
 
-// Page table mapping for each process: pageTable[proc_id][logical_page_index]
-char pageTable[MAX_PROC][NUM_LOGICAL_PAGES];
+typedef struct {
+    int valid;
+    int logical_page;
+    int frame;
+    int permissions;
+} TLBEntry;
+
+static int pageTableFrame[MAX_PROC] = {-1, -1, -1, -1};
+static TLBEntry tlb[MAX_PROC][TLB_ENTRIES];
+static unsigned long tlb_hits[MAX_PROC] = {0};
+static unsigned long tlb_misses[MAX_PROC] = {0};
+static unsigned int tlb_next[MAX_PROC] = {0};
+static int shared_memory_frame = -1;
 
 // Physical frame availability tracker: 0 = Free, 1 = Allocated
 char freePages[NUM_PHYSICAL_PAGES] = {0};
@@ -36,8 +47,10 @@ void printPageAllocation(int proc_id) {
     printf("--------------------------------------\n");
     printf("Page Table for process id %d :\n", proc_id);
     for (int i=0; i < NUM_LOGICAL_PAGES; i++) {
-        if (pageTable[proc_id][i] != -1) {
-            printf("Page %d : Frame %d\n", i, pageTable[proc_id][i]);
+        int entry = get_page_entry(proc_id, i);
+        if (entry & PTE_VALID) {
+            printf("Page %d : Frame %d Permissions 0x%X\n", i,
+                   entry >> PTE_FRAME_SHIFT, entry & 0xFF);
         }
     }
     printf("--------------------------------------\n");
@@ -106,25 +119,110 @@ void cleanup_system(void) {
     }
     reset_keyboard();
 }
-void init_page_table(int proc_id) {
-    for (int page = 0; page < NUM_LOGICAL_PAGES; page++) {
-        pageTable[proc_id][page] = -1; // -1 means page is not loaded / unmapped
+static int page_table_physical_address(int proc_id, int logical_page) {
+    if (proc_id < 0 || proc_id >= MAX_PROC || logical_page < 0 ||
+        logical_page >= NUM_LOGICAL_PAGES || pageTableFrame[proc_id] < 0) {
+        return -1;
     }
+    return pageTableFrame[proc_id] * PAGESIZE + logical_page * (int)sizeof(int);
 }
 
-int getPhysicalAddress(int proc_id, int isFetch, int address) {
-    int page_idx = (isFetch) ? (address / PAGESIZE) : ((1024 / PAGESIZE) + (address / PAGESIZE));
+int get_page_entry(int proc_id, int logical_page) {
+    int address = page_table_physical_address(proc_id, logical_page);
+    if (address < 0 || address + (int)sizeof(int) > MEMSIZE) return 0;
 
-    // Bounds/Unmapped Check
-    if (page_idx < 0 || page_idx >= NUM_LOGICAL_PAGES || pageTable[proc_id][page_idx] == -1) {
-        log_system("[PAGE FAULT] PID %d accessed unmapped logical page %d (Addr: %d)\n", 
+    int entry = 0;
+    for (int byte_index = 0; byte_index < (int)sizeof(int); byte_index++) {
+        entry |= ((unsigned char)memory[address + byte_index]) << (byte_index * 8);
+    }
+    return entry;
+}
+
+int set_page_entry(int proc_id, int logical_page, int frame, int permissions) {
+    int address = page_table_physical_address(proc_id, logical_page);
+    if (address < 0 || address + (int)sizeof(int) > MEMSIZE) return 0;
+
+        unsigned int entry = permissions == 0
+                ? 0
+                : ((unsigned int)frame << PTE_FRAME_SHIFT) |
+                    (unsigned int)(PTE_VALID | permissions);
+    for (int byte_index = 0; byte_index < (int)sizeof(int); byte_index++) {
+        memory[address + byte_index] = (char)((entry >> (byte_index * 8)) & 0xFF);
+    }
+    return 1;
+}
+
+static void invalidate_tlb(int proc_id) {
+    if (proc_id < 0 || proc_id >= MAX_PROC) return;
+    for (int i = 0; i < TLB_ENTRIES; i++) tlb[proc_id][i].valid = 0;
+    tlb_next[proc_id] = 0;
+}
+
+static int permission_for_access(int access_type) {
+    if (access_type == ACCESS_EXECUTE) return PTE_EXECUTE;
+    if (access_type == ACCESS_WRITE) return PTE_WRITE;
+    return PTE_READ;
+}
+
+void kill_process(int proc_id);
+
+void init_page_table(int proc_id) {
+    if (proc_id < 0 || proc_id >= MAX_PROC) return;
+    if (pageTableFrame[proc_id] < 0) pageTableFrame[proc_id] = getFreePage();
+    for (int page = 0; page < NUM_LOGICAL_PAGES; page++) {
+        set_page_entry(proc_id, page, 0, 0);
+    }
+    invalidate_tlb(proc_id);
+}
+
+int getPhysicalAddress(int proc_id, int access_type, int address) {
+    if (proc_id < 0 || proc_id >= MAX_PROC || address < 0) {
+        log_system("[MMU FAULT] Invalid access: process=%d address=%d\n", proc_id, address);
+        if (proc_id >= 0 && proc_id < MAX_PROC) kill_process(proc_id);
+        return -1;
+    }
+
+    int page_idx = (access_type == ACCESS_EXECUTE)
+        ? (address / PAGESIZE)
+        : ((1024 / PAGESIZE) + (address / PAGESIZE));
+    int requested_permission = permission_for_access(access_type);
+
+    for (int i = 0; i < TLB_ENTRIES; i++) {
+        TLBEntry *entry = &tlb[proc_id][i];
+        if (entry->valid && entry->logical_page == page_idx) {
+            if ((entry->permissions & requested_permission) == 0) {
+                log_system("[PROTECTION FAULT] PID %d page %d access=%d\n", proc_id, page_idx, access_type);
+                kill_process(proc_id);
+                return -1;
+            }
+            tlb_hits[proc_id]++;
+            return entry->frame * PAGESIZE + (address % PAGESIZE);
+        }
+    }
+    tlb_misses[proc_id]++;
+
+    int page_entry = get_page_entry(proc_id, page_idx);
+    if (page_idx < 0 || page_idx >= NUM_LOGICAL_PAGES || !(page_entry & PTE_VALID)) {
+        log_system("[PAGE FAULT] PID %d accessed unmapped logical page %d (Addr: %d)\n",
                    proc_id, page_idx, address);
         kill_process(proc_id);
         return -1;
     }
 
-    int frame = pageTable[proc_id][page_idx];
-    return (frame * PAGESIZE) + (address % PAGESIZE);
+    int permissions = page_entry & 0xFF;
+    if ((permissions & requested_permission) == 0) {
+        log_system("[PROTECTION FAULT] PID %d page %d access=%d\n", proc_id, page_idx, access_type);
+        kill_process(proc_id);
+        return -1;
+    }
+
+    int frame = page_entry >> PTE_FRAME_SHIFT;
+    tlb[proc_id][tlb_next[proc_id]].valid = 1;
+    tlb[proc_id][tlb_next[proc_id]].logical_page = page_idx;
+    tlb[proc_id][tlb_next[proc_id]].frame = frame;
+    tlb[proc_id][tlb_next[proc_id]].permissions = permissions;
+    tlb_next[proc_id] = (tlb_next[proc_id] + 1) % TLB_ENTRIES;
+    return frame * PAGESIZE + (address % PAGESIZE);
 }
 
 void kill_process(int proc_id) {
@@ -147,12 +245,37 @@ int getFreePage(void) {
 
 void freeProcessPages(int proc_id) {
     for (int i = 0; i < NUM_LOGICAL_PAGES; i++) {
-        int frame = (unsigned char)pageTable[proc_id][i];
+        int entry = get_page_entry(proc_id, i);
+        int frame = entry >> PTE_FRAME_SHIFT;
+        int shared_page = (1024 + SHARED_MEMORY_ADDRESS) / PAGESIZE;
+        if (i == shared_page) continue;
         if (frame > 0 && frame < NUM_PHYSICAL_PAGES) {
             freePages[frame] = 0; // Unmark frame in free tracking array
         }
-        pageTable[proc_id][i] = 0; // Clear entry in page table
+        set_page_entry(proc_id, i, 0, 0);
     }
+    if (pageTableFrame[proc_id] > 0 && pageTableFrame[proc_id] < NUM_PHYSICAL_PAGES) {
+        freePages[pageTableFrame[proc_id]] = 0;
+    }
+    pageTableFrame[proc_id] = -1;
+    invalidate_tlb(proc_id);
+}
+
+void map_shared_memory(int proc_id) {
+    if (proc_id < 0 || proc_id >= MAX_PROC) return;
+    if (shared_memory_frame < 0) shared_memory_frame = getFreePage();
+
+    int shared_page = (1024 + SHARED_MEMORY_ADDRESS) / PAGESIZE;
+    int old_entry = get_page_entry(proc_id, shared_page);
+    int old_frame = old_entry >> PTE_FRAME_SHIFT;
+    if ((old_entry & PTE_VALID) && old_frame != shared_memory_frame &&
+        old_frame > 0 && old_frame < NUM_PHYSICAL_PAGES) {
+        freePages[old_frame] = 0;
+    }
+    set_page_entry(proc_id, shared_page, shared_memory_frame, PTE_READ | PTE_WRITE);
+    invalidate_tlb(proc_id);
+    log_system("[SHM] PID %d mapped shared frame %d at logical address %d\n",
+               proc_id, shared_memory_frame, SHARED_MEMORY_ADDRESS);
 }
 
 /* Loads bytecode directly into frame-allocated physical memory */
@@ -177,13 +300,13 @@ static int load_bytes_to_memory(const char *program_file, const char *data_file,
         int page_idx = inst_byte_count / PAGESIZE;
 
         // Allocate physical frame if page is unmapped
-        if (pageTable[proc_id][page_idx] == -1) {
+        if (!(get_page_entry(proc_id, page_idx) & PTE_VALID)) {
             int frame = getFreePage();
             if (frame == -1) { fclose(fprog); fclose(fdata); return 0; }
-            pageTable[proc_id][page_idx] = frame;
+            set_page_entry(proc_id, page_idx, frame, PTE_READ | PTE_EXECUTE);
         }
 
-        int phys_addr = (pageTable[proc_id][page_idx] * PAGESIZE) + (inst_byte_count % PAGESIZE);
+        int phys_addr = ((get_page_entry(proc_id, page_idx) >> PTE_FRAME_SHIFT) * PAGESIZE) + (inst_byte_count % PAGESIZE);
         for (int b = 0; b < 4; b++) {
             memory[phys_addr + b] = (char)bytes[b];
         }
@@ -205,13 +328,13 @@ static int load_bytes_to_memory(const char *program_file, const char *data_file,
         }
 
         // Allocate physical frame for new data page
-        if (pageTable[proc_id][logical_page_idx] == -1) {
+        if (!(get_page_entry(proc_id, logical_page_idx) & PTE_VALID)) {
             int frame = getFreePage();
             if (frame == -1) { fclose(fdata); return 0; }
-            pageTable[proc_id][logical_page_idx] = frame;
+            set_page_entry(proc_id, logical_page_idx, frame, PTE_READ | PTE_WRITE);
         }
 
-        int phys_addr = (pageTable[proc_id][logical_page_idx] * PAGESIZE) + (data_byte_count % PAGESIZE);
+        int phys_addr = ((get_page_entry(proc_id, logical_page_idx) >> PTE_FRAME_SHIFT) * PAGESIZE) + (data_byte_count % PAGESIZE);
         for (int b = 0; b < 4; b++) {
             memory[phys_addr + b] = (char)bytes[b];
         }
@@ -224,6 +347,7 @@ static int load_bytes_to_memory(const char *program_file, const char *data_file,
         data_byte_count += 4;
     }
     printPageAllocation(proc_id);
+    map_shared_memory(proc_id);
 
     fclose(fdata);
     return 1;
@@ -252,10 +376,11 @@ void finalize(int proc_id, const char *output_data_file) {
     if (fdata != NULL) {
         // Iterate through all logical data pages (pages 2 to 9)
         for (int page = data_page_offset; page < NUM_LOGICAL_PAGES; page++) {
-            int frame = pageTable[proc_id][page];
+            int entry = get_page_entry(proc_id, page);
+            int frame = entry >> PTE_FRAME_SHIFT;
             
             // Only write back pages that were allocated/loaded
-            if (frame != -1) {
+            if (entry & PTE_VALID) {
                 int frame_start = frame * PAGESIZE;
 
                 for (int offset = 0; offset < PAGESIZE; offset += 4) {
@@ -286,6 +411,10 @@ void loader(const char *program_file, const char *data_file) {
     pcb.program_file[PATH_LENGTH - 1] = '\0';
     strncpy(pcb.data_file, data_file, PATH_LENGTH - 1);
     pcb.data_file[PATH_LENGTH - 1] = '\0';
+    pcb.priority = 0;
+    pcb.instructions_executed = 0;
+    pcb.context_switches = 0;
+    pcb.waiting_ticks = 0;
 
     char temp_prog_name[PATH_LENGTH];
     strncpy(temp_prog_name, program_file, PATH_LENGTH - 1);
@@ -306,6 +435,7 @@ void loader(const char *program_file, const char *data_file) {
 
         initialise(pcb.proc_id, compiled_byte_file, pcb.data_file);
         reset(pcb.proc_id);
+        save_context(pcb.proc_id, &pcb.context);
 
         enqueue(&readyQueue, pcb);
         printf("[OS] Loaded program '%s' into Core %d (PID: %d)\n", program_file, pcb.proc_id, pcb.pid);
@@ -323,11 +453,20 @@ void scheduler(void) {
 
     for (int i = 0; i < count; i++) {
         PCB process;
-        if (!dequeue(&readyQueue, &process)) break;
+        if (!dequeue_highest_priority(&readyQueue, &process)) break;
+
+        for (int waiting = 0; waiting < readyQueue.size; waiting++) {
+            int index = (readyQueue.front + waiting) % QUEUE_CAPACITY;
+            readyQueue.items[index].waiting_ticks++;
+            if (readyQueue.items[index].priority < 10) readyQueue.items[index].priority++;
+        }
 
         process.state = PROCESS_RUNNING;
-        
+        load_context(process.proc_id, &process.context);
+        process.context_switches++;
         process_instructions(process.proc_id, BURST_TIME);
+        save_context(process.proc_id, &process.context);
+        process.instructions_executed = process_instruction_count[process.proc_id];
 
         if (end_of_simulation[process.proc_id]) {
             printf("[OS] Process PID %d on Core %d finished execution.\n", process.pid, process.proc_id);
@@ -362,12 +501,26 @@ void shell(void) {
             if (strlen(input_buffer) > 0) {
                 if (strcmp(input_buffer, "exit") == 0) {
                     shell_active = 0; 
+                } else if (strcmp(input_buffer, "stats") == 0) {
+                    print_process_statistics();
                 } else {
-                    char prog_file[PATH_LENGTH], data_file[PATH_LENGTH];
-                    if (sscanf(input_buffer, "%s %s", prog_file, data_file) == 2) {
-                        loader(prog_file, data_file); 
+                    int pid, priority;
+                    char command[PATH_LENGTH];
+                    if (sscanf(input_buffer, "priority %d %d", &pid, &priority) == 2) {
+                        set_process_priority(pid, priority);
+                    } else if (sscanf(input_buffer, "memmap %d", &pid) == 1) {
+                        print_memory_map(pid);
+                    } else if (sscanf(input_buffer, "cache %d", &pid) == 1) {
+                        print_memory_statistics(pid);
+                    } else if (sscanf(input_buffer, "tlb %d", &pid) == 1) {
+                        print_tlb_statistics(pid);
                     } else {
-                        log_system("Invalid Command format. Use: <program.txt> <data.byte>\n");
+                        char prog_file[PATH_LENGTH], data_file[PATH_LENGTH];
+                        if (sscanf(input_buffer, "%s %s", prog_file, data_file) == 2) {
+                            loader(prog_file, data_file);
+                        } else if (sscanf(input_buffer, "%s", command) == 1) {
+                            log_system("Unknown command: %s\n", command);
+                        }
                     }
                 }
             }
@@ -391,4 +544,44 @@ void shell(void) {
             fflush(stdout);
         }
     }
+}
+
+void print_memory_map(int proc_id) {
+    if (proc_id < 0 || proc_id >= MAX_PROC) {
+        printf("Invalid process id %d\n", proc_id);
+        return;
+    }
+    printPageAllocation(proc_id);
+    printf("Shared buffer logical address: %d\n", SHARED_MEMORY_ADDRESS);
+}
+
+void set_process_priority(int pid, int priority) {
+    for (int i = 0; i < readyQueue.size; i++) {
+        int index = (readyQueue.front + i) % QUEUE_CAPACITY;
+        if (readyQueue.items[index].pid == pid) {
+            readyQueue.items[index].priority = priority;
+            log_system("[SCHEDULER] PID %d priority set to %d\n", pid, priority);
+            return;
+        }
+    }
+    log_system("[SCHEDULER] PID %d not found in ready queue\n", pid);
+}
+
+void print_process_statistics(void) {
+    for (int i = 0; i < readyQueue.size; i++) {
+        int index = (readyQueue.front + i) % QUEUE_CAPACITY;
+        PCB *process = &readyQueue.items[index];
+        printf("PID %d priority=%d instructions=%lu switches=%lu waiting=%lu\n",
+               process->pid, process->priority, process->instructions_executed,
+               process->context_switches, process->waiting_ticks);
+    }
+}
+
+void print_tlb_statistics(int proc_id) {
+    if (proc_id < 0 || proc_id >= MAX_PROC) {
+        printf("Invalid process id %d\n", proc_id);
+        return;
+    }
+    printf("PID %d TLB hits=%lu misses=%lu\n", proc_id,
+           tlb_hits[proc_id], tlb_misses[proc_id]);
 }
